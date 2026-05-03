@@ -68,6 +68,24 @@ data:
       retention_days: {{ .Values.chronicle.retentionDays }}
       {{- end }}
 
+    default_definition: {{ .Values.defaultDefinition | default "skuldClaude" | quote }}
+    {{- if .Values.sessionDefinitions }}
+    session_definitions:
+      {{- range $key, $def := .Values.sessionDefinitions }}
+      {{ $key }}:
+        enabled: {{ $def.enabled | default false }}
+        display_name: {{ $def.displayName | default $key | quote }}
+        description: {{ $def.description | default "" | quote }}
+        default_model: {{ $def.defaultModel | default "" | quote }}
+        {{- if $def.labels }}
+        labels: {{ $def.labels | toJson }}
+        {{- end }}
+        {{- if $def.defaults }}
+        defaults: {{ $def.defaults | toJson }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+
     {{- if .Values.profiles }}
     profiles:
       {{- range .Values.profiles }}

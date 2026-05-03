@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -55,6 +56,12 @@ logger = logging.getLogger(__name__)
 def _sanitize_log(value: object) -> str:
     """Sanitize a value for safe log output (prevent log injection)."""
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
+def _public_loopback_host() -> str:
+    """Return the loopback host we publish to browser-facing clients."""
+    host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    return "localhost" if host == "127.0.0.1" else host
 
 
 class SessionNotFoundError(Exception):
@@ -535,6 +542,7 @@ class SessionService:
     async def start_session(
         self,
         session_id: UUID,
+        definition: str | None = None,
         profile_name: str | None = None,
         template_name: str | None = None,
         principal: Principal | None = None,
@@ -563,9 +571,7 @@ class SessionService:
             raise SessionStateError(session_id, "start", session.status)
 
         # Set chat_endpoint eagerly — URL is deterministic from session ID
-        import os
-
-        host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        host = _public_loopback_host()
         port = os.environ.get("NIUU_SERVER_PORT", "8080")
         chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
 
@@ -580,6 +586,7 @@ class SessionService:
             self._provision_background(
                 starting,
                 principal=principal,
+                definition=definition,
                 template_name=template_name,
                 profile_name=profile_name,
                 terminal_restricted=terminal_restricted,
@@ -602,6 +609,7 @@ class SessionService:
         self,
         session: Session,
         principal: Principal | None = None,
+        definition: str | None = None,
         template_name: str | None = None,
         profile_name: str | None = None,
         terminal_restricted: bool = False,
@@ -618,6 +626,7 @@ class SessionService:
             result = await self._start_with_pipeline(
                 session,
                 principal,
+                definition,
                 template_name,
                 profile_name,
                 terminal_restricted,
@@ -660,6 +669,7 @@ class SessionService:
         self,
         session: Session,
         principal: Principal | None,
+        definition: str | None,
         template_name: str | None,
         profile_name: str | None,
         terminal_restricted: bool,
@@ -690,6 +700,7 @@ class SessionService:
 
         context = SessionContext(
             principal=principal,
+            definition=definition,
             template_name=template_name,
             profile_name=profile_name,
             terminal_restricted=terminal_restricted,
@@ -912,7 +923,7 @@ class SessionService:
         ):
             raise SessionStateError(session_id, "archive", session.status)
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         archived = session.model_copy(
             update={
                 "status": SessionStatus.ARCHIVED,
@@ -949,7 +960,7 @@ class SessionService:
             update={
                 "status": SessionStatus.STOPPED,
                 "archived_at": None,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
         updated = await self._repository.update(restored)

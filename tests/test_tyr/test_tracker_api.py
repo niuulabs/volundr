@@ -15,7 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tyr.api.tracker import create_tracker_router, resolve_trackers
+from tyr.api.tracker import create_canonical_tracker_router, create_tracker_router, resolve_trackers
 from tyr.config import AuthConfig
 from tyr.domain.models import (
     Phase,
@@ -340,10 +340,18 @@ class MockSagaRepo(SagaRepository):
     async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
         pass
 
+    async def get_phases_by_saga(self, saga_id: UUID) -> list[Phase]:
+        return [phase for phase in self.phases if phase.saga_id == saga_id]
+
+    async def get_raids_by_phase(self, phase_id: UUID) -> list[Raid]:
+        return [raid for raid in self.raids if raid.phase_id == phase_id]
+
 
 @pytest.fixture
 def client(mock_tracker: MockTracker) -> TestClient:
     app = FastAPI()
+    app.state.legacy_route_hits = {}
+    app.include_router(create_canonical_tracker_router())
     app.include_router(create_tracker_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.state.saga_repo = MockSagaRepo()
@@ -366,6 +374,14 @@ class TestListProjects:
         assert len(data) == 2
         assert data[0]["id"] == "proj-1"
         assert data[1]["id"] == "proj-2"
+
+    def test_canonical_projects_match_legacy(self, client: TestClient):
+        legacy = client.get("/api/v1/tyr/tracker/projects")
+        canonical = client.get("/api/v1/tracker/projects")
+        assert legacy.status_code == 200
+        assert canonical.status_code == 200
+        assert canonical.json() == legacy.json()
+        assert legacy.headers["X-Niuu-Canonical-Route"] == "/api/v1/tracker/projects"
 
 
 class TestGetProject:
@@ -394,6 +410,13 @@ class TestListMilestones:
         assert resp.status_code == 200
         assert resp.json() == []
 
+    def test_canonical_milestones_match_legacy(self, client: TestClient):
+        legacy = client.get("/api/v1/tyr/tracker/projects/proj-1/milestones")
+        canonical = client.get("/api/v1/tracker/projects/proj-1/milestones")
+        assert legacy.status_code == 200
+        assert canonical.status_code == 200
+        assert canonical.json() == legacy.json()
+
 
 class TestListIssues:
     def test_all_issues(self, client: TestClient):
@@ -413,6 +436,13 @@ class TestListIssues:
         resp = client.get("/api/v1/tyr/tracker/projects/proj-1/issues?milestone_id=nonexistent")
         assert resp.status_code == 200
         assert resp.json() == []
+
+    def test_canonical_project_issues_match_legacy(self, client: TestClient):
+        legacy = client.get("/api/v1/tyr/tracker/projects/proj-1/issues?milestone_id=ms-1")
+        canonical = client.get("/api/v1/tracker/projects/proj-1/issues?milestone_id=ms-1")
+        assert legacy.status_code == 200
+        assert canonical.status_code == 200
+        assert canonical.json() == legacy.json()
 
 
 class TestImportProject:
@@ -445,3 +475,25 @@ class TestImportProject:
             },
         )
         assert resp.status_code == 404
+
+    def test_canonical_import_matches_legacy_shape(self, client: TestClient):
+        legacy = client.post(
+            "/api/v1/tyr/tracker/import",
+            json={
+                "project_id": "proj-1",
+                "repos": ["org/repo"],
+                "base_branch": "dev",
+            },
+        )
+        canonical = client.post(
+            "/api/v1/tracker/import",
+            json={
+                "project_id": "proj-1",
+                "repos": ["org/repo"],
+                "base_branch": "dev",
+            },
+        )
+        assert legacy.status_code == 200
+        assert canonical.status_code == 200
+        assert canonical.json()["tracker_id"] == legacy.json()["tracker_id"]
+        assert canonical.json()["name"] == legacy.json()["name"]

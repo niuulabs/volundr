@@ -27,6 +27,15 @@ class TestWebDistDir:
         assert dist.is_dir()
         assert (dist / "index.html").exists()
 
+    def test_prefers_web_next_app_dist_when_available(self, tmp_path: Path):
+        app_dist = tmp_path / "web-next" / "apps" / "niuu" / "dist"
+        app_dist.mkdir(parents=True)
+
+        with patch(
+            "cli.resources.Path.resolve", return_value=tmp_path / "src" / "cli" / "resources.py"
+        ):
+            assert web_dist_dir() == app_dist
+
     def test_raises_when_no_dist_found(self):
         with patch("cli.resources.importlib.resources.files") as mock_files:
             trav = _mock_traversable(mock_files)

@@ -2325,6 +2325,7 @@ def _wire_mimir_triggers(
             settings.dream_cycle.poll_interval_seconds,
         )
 
+
 def _wire_cron(
     drive_loop: Any,
     cron_jobs: list[Any],

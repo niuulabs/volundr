@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN_DIR="${ROOT_DIR}/build/dev-run"
+LOG_DIR="${RUN_DIR}/logs"
+PLATFORM_PID_FILE="${RUN_DIR}/platform.pid"
+PG_CTL="${ROOT_DIR}/build/pginstall/bin/pg_ctl"
+PG_DATA="${HOME}/.niuu/pgdata"
+PLATFORM_LOG="${LOG_DIR}/platform.log"
+PLATFORM_URL="http://127.0.0.1:8080/health"
+
+mkdir -p "${LOG_DIR}"
+
+cleanup_on_error() {
+  "${ROOT_DIR}/stop-dev" >/dev/null 2>&1 || true
+}
+
+wait_for_url() {
+  local url="$1"
+  local label="$2"
+  local attempts="${3:-60}"
+
+  for ((i = 1; i <= attempts; i++)); do
+    if curl -fsS "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "${label} failed to become ready. Check logs:" >&2
+  echo "  ${PLATFORM_LOG}" >&2
+  return 1
+}
+
+trap cleanup_on_error ERR
+
+"${ROOT_DIR}/stop-dev" >/dev/null 2>&1 || true
+
+echo "Preparing workspace..."
+uv sync --extra dev
+pnpm --dir "${ROOT_DIR}/web-next" install
+make -C "${ROOT_DIR}" build-postgres
+pnpm --dir "${ROOT_DIR}/web-next" -r --filter "@niuulabs/*" --filter "!@niuulabs/niuu" build
+(
+  cd "${ROOT_DIR}/web-next/apps/niuu"
+  pnpm exec vite build
+)
+
+if [[ -x "${PG_CTL}" ]]; then
+  "${PG_CTL}" -D "${PG_DATA}" stop -m fast >/dev/null 2>&1 || true
+fi
+
+echo "Starting platform..."
+nohup env PYTHONUNBUFFERED=1 uv run niuu platform up --skip-preflight \
+  >"${PLATFORM_LOG}" 2>&1 &
+echo $! > "${PLATFORM_PID_FILE}"
+wait_for_url "${PLATFORM_URL}" "Platform"
+
+trap - ERR
+
+cat <<EOF
+Ready.
+
+UI:
+  http://localhost:8080/?config=/config.live.json
+  http://localhost:8080/volundr?config=/config.live.json
+
+API:
+  http://127.0.0.1:8080/health
+
+Logs:
+  ${PLATFORM_LOG}
+
+Stop:
+  ${ROOT_DIR}/stop-dev
+EOF

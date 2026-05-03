@@ -77,6 +77,11 @@ class PhaseResponse(BaseModel):
     raids: list[RaidResponse] = Field(default_factory=list)
 
 
+class PhaseSummaryResponse(BaseModel):
+    total: int = 0
+    completed: int = 0
+
+
 class SagaListItem(BaseModel):
     id: str
     tracker_id: str
@@ -90,6 +95,10 @@ class SagaListItem(BaseModel):
     milestone_count: int = 0
     issue_count: int = 0
     url: str = ""
+    base_branch: str = "main"
+    confidence: float = 0.0
+    created_at: str = ""
+    phase_summary: PhaseSummaryResponse = Field(default_factory=PhaseSummaryResponse)
 
 
 class SagaDetailResponse(BaseModel):
@@ -104,6 +113,10 @@ class SagaDetailResponse(BaseModel):
     status: str
     progress: float = 0.0
     url: str = ""
+    base_branch: str = "main"
+    confidence: float = 0.0
+    created_at: str = ""
+    phase_summary: PhaseSummaryResponse = Field(default_factory=PhaseSummaryResponse)
     phases: list[PhaseResponse]
 
 
@@ -159,7 +172,7 @@ class PlanRequest(BaseModel):
 
     spec: str = Field(min_length=1)
     repo: str = Field(min_length=1)
-    base_branch: str = Field(description="Base branch for the planning session")
+    base_branch: str = Field(default="main", description="Base branch for the planning session")
     model: str = Field(default="")
 
 
@@ -220,6 +233,8 @@ class CommittedSagaResponse(BaseModel):
     base_branch: str
     status: str
     confidence: float
+    created_at: str
+    phase_summary: PhaseSummaryResponse
     phases: list[CommittedPhaseResponse]
     warnings: list[str] = Field(default_factory=list)
 
@@ -275,6 +290,21 @@ async def _find_project(
     return None
 
 
+async def _build_phase_summary(
+    repo: SagaRepository,
+    saga_id: UUID,
+) -> PhaseSummaryResponse:
+    """Summarize persisted phase progress for frontend saga summary routes."""
+    try:
+        phases = await repo.get_phases_by_saga(saga_id)
+    except NotImplementedError:
+        phases = []
+    return PhaseSummaryResponse(
+        total=len(phases),
+        completed=sum(1 for phase in phases if phase.status == PhaseStatus.COMPLETE),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -305,6 +335,7 @@ def create_sagas_router() -> APIRouter:
         items: list[SagaListItem] = []
         for saga in sagas:
             project = all_projects.get(saga.tracker_id)
+            phase_summary = await _build_phase_summary(repo, saga.id)
             items.append(
                 SagaListItem(
                     id=str(saga.id),
@@ -314,11 +345,15 @@ def create_sagas_router() -> APIRouter:
                     name=project.name if project else saga.name,
                     repos=saga.repos,
                     feature_branch=saga.feature_branch,
-                    status=project.status if project else "unknown",
+                    status=saga.status.value.lower(),
                     progress=project.progress if project else 0.0,
                     milestone_count=project.milestone_count if project else 0,
                     issue_count=project.issue_count if project else 0,
                     url=project.url if project else "",
+                    base_branch=saga.base_branch,
+                    confidence=saga.confidence,
+                    created_at=saga.created_at.isoformat(),
+                    phase_summary=phase_summary,
                 )
             )
         return items
@@ -407,6 +442,8 @@ def create_sagas_router() -> APIRouter:
                 )
             )
 
+        phase_summary = await _build_phase_summary(repo, saga.id)
+
         return SagaDetailResponse(
             id=str(saga.id),
             tracker_id=saga.tracker_id,
@@ -416,9 +453,13 @@ def create_sagas_router() -> APIRouter:
             description=project.description if project else "",
             repos=saga.repos,
             feature_branch=saga.feature_branch,
-            status=project.status if project else "planned",
+            status=saga.status.value.lower(),
             progress=project.progress if project else 0.0,
             url=project.url if project else "",
+            base_branch=saga.base_branch,
+            confidence=saga.confidence,
+            created_at=saga.created_at.isoformat(),
+            phase_summary=phase_summary,
             phases=phase_responses,
         )
 
@@ -588,7 +629,7 @@ def create_sagas_router() -> APIRouter:
             new_status = SagaStatus(body.status.upper())
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Invalid saga_id or status: {saga_id!r} / {body.status!r}",
             )
 
@@ -610,7 +651,7 @@ def create_sagas_router() -> APIRouter:
             name=project.name if project else saga.name,
             repos=saga.repos,
             feature_branch=saga.feature_branch,
-            status=project.status if project else new_status.value,
+            status=new_status.value.lower(),
             progress=project.progress if project else 0.0,
             milestone_count=project.milestone_count if project else 0,
             issue_count=project.issue_count if project else 0,
@@ -870,6 +911,11 @@ def create_sagas_router() -> APIRouter:
             base_branch=saga.base_branch,
             status=saga.status.value,
             confidence=saga.confidence,
+            created_at=saga.created_at.isoformat(),
+            phase_summary=PhaseSummaryResponse(
+                total=len(phases),
+                completed=sum(1 for phase in phases if phase.status == PhaseStatus.COMPLETE),
+            ),
             phases=phase_responses,
             warnings=warnings,
         )

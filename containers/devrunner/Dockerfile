@@ -42,11 +42,14 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
 # Upgrade bundled npm to fix GHSA-qffp-2rhf-9h96 (tar) and GHSA-*-minimatch CVEs
 RUN npm install -g npm@11.3.0
 
-# Install Claude Code CLI globally via npm (same method as skuld pod)
-RUN npm install -g @anthropic-ai/claude-code@2.1.81
+# Install Claude Code CLI globally via npm
+RUN npm install -g @anthropic-ai/claude-code@2.1.121
 
-# Install OpenAI Codex CLI
-RUN npm install -g @openai/codex@0.114.0
+# Install OpenAI Codex CLI globally via npm
+RUN npm install -g @openai/codex@0.125.0
+
+# Install OpenCode (opencode.ai) globally via npm
+RUN npm install -g opencode-ai@1.14.29
 
 # Install PostgreSQL 16
 RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \

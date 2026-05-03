@@ -83,6 +83,7 @@ class SyncSessionService(SessionService):
     async def start_session(
         self,
         session_id: UUID,
+        definition: str | None = None,
         profile_name: str | None = None,
         template_name: str | None = None,
         principal: Principal | None = None,

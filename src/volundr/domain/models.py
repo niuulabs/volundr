@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal
@@ -24,6 +24,11 @@ from niuu.domain.models import (  # noqa: F401
     SecretType,
     StoredCredential,
 )
+
+
+def _utc_now() -> datetime:
+    """Return a timezone-aware UTC timestamp."""
+    return datetime.now(UTC)
 
 
 class UserStatus(StrEnum):
@@ -324,11 +329,11 @@ class Session(BaseModel):
         description="URL for the editor IDE when running",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp when the session was created",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp of the last session update",
     )
     last_active: datetime | None = Field(
@@ -425,7 +430,7 @@ class Session(BaseModel):
 
     def with_status(self, status: SessionStatus) -> Session:
         """Return a copy with updated status and timestamp."""
-        return self.model_copy(update={"status": status, "updated_at": datetime.utcnow()})
+        return self.model_copy(update={"status": status, "updated_at": datetime.now(UTC)})
 
     def with_endpoints(self, chat_endpoint: str, code_endpoint: str) -> Session:
         """Return a copy with updated endpoints and timestamp."""
@@ -433,7 +438,7 @@ class Session(BaseModel):
             update={
                 "chat_endpoint": chat_endpoint,
                 "code_endpoint": code_endpoint,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
 
@@ -443,7 +448,7 @@ class Session(BaseModel):
             update={
                 "chat_endpoint": None,
                 "code_endpoint": None,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
 
@@ -452,7 +457,7 @@ class Session(BaseModel):
         return self.model_copy(
             update={
                 "pod_name": pod_name,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
 
@@ -461,13 +466,13 @@ class Session(BaseModel):
         return self.model_copy(
             update={
                 "error": error,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
         )
 
     def with_activity(self, message_count: int, tokens: int) -> Session:
         """Return a copy with updated activity metrics and timestamp."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         return self.model_copy(
             update={
                 "message_count": message_count,
@@ -622,11 +627,11 @@ class Chronicle(BaseModel):
         description="Parent chronicle ID for reforge chains",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp when the chronicle was created",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp of the last chronicle update",
     )
 
@@ -738,11 +743,11 @@ class SavedPrompt(BaseModel):
         description="Tags for categorization and search",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp when the prompt was created",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp of the last prompt update",
     )
 
@@ -795,7 +800,7 @@ class ProjectMapping(BaseModel):
         description="Human-readable project name",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp when the mapping was created",
     )
 
@@ -1260,11 +1265,11 @@ class Preset(BaseModel):
         description="Additional workload-specific configuration",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp when the preset was created",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Timestamp of the last preset update",
     )
 

@@ -7,6 +7,7 @@ overriding FastAPI dependencies with mock implementations.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -37,6 +38,7 @@ from tyr.domain.services.dispatch_service import (
     DispatchConfig as ServiceDispatchConfig,
 )
 from tyr.domain.services.dispatch_service import (
+    DispatchResult,
     DispatchService,
     build_prompt,
     is_ready,
@@ -146,6 +148,10 @@ class MockVolundr(VolundrPort):
         yield  # type: ignore[misc]  # pragma: no cover
 
 
+def _auth_headers(user_id: str = "dev-user") -> dict[str, str]:
+    return {"x-auth-user-id": user_id}
+
+
 class MockVolundrFactory:
     """Stub VolundrFactory that returns a configurable list of adapters."""
 
@@ -192,6 +198,68 @@ class MockDispatcherRepo(DispatcherRepository):
 
     async def list_active_owner_ids(self) -> list[str]:
         return []
+
+
+class DispatchAliasTracker(MockTracker):
+    def __init__(self) -> None:
+        super().__init__()
+        now = datetime.now(UTC)
+        self._saga = Saga(
+            id=uuid4(),
+            tracker_id="proj-1",
+            tracker_type="mock",
+            slug="alpha",
+            name="Alpha",
+            repos=["org/repo"],
+            feature_branch="feat/alpha",
+            status=SagaStatus.ACTIVE,
+            confidence=0.0,
+            created_at=now,
+            base_branch="main",
+            owner_id="dev-user",
+        )
+        self.issues = {
+            "proj-1": [
+                TrackerIssue(
+                    id="i-1",
+                    identifier="i-1",
+                    title="Dispatch me",
+                    description="",
+                    status="Todo",
+                    priority=1,
+                    priority_label="Urgent",
+                    url="https://linear.app/i-1",
+                )
+            ]
+        }
+
+    async def get_raid(self, tracker_id: str):
+        from tyr.domain.models import Raid, RaidStatus
+
+        return Raid(
+            id=uuid4(),
+            phase_id=uuid4(),
+            tracker_id=tracker_id,
+            name="Dispatch me",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=None,
+            status=RaidStatus.PENDING,
+            confidence=0.0,
+            session_id=None,
+            branch=None,
+            chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
+            retry_count=0,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            identifier=tracker_id,
+        )
+
+    async def get_saga_for_raid(self, tracker_id: str):
+        return self._saga
 
 
 # -------------------------------------------------------------------
@@ -529,6 +597,35 @@ class TestGetQueue:
         assert "ALPHA-1" in ids
         assert "ALPHA-3" in ids
         assert "ALPHA-2" not in ids
+
+    def test_returns_unstarted_linear_issues(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+        mock_volundr: MockVolundr,
+    ):
+        mock_tracker.issues["proj-1"].append(
+            TrackerIssue(
+                id="i-4",
+                identifier="ALPHA-4",
+                title="Plan rollout",
+                description="Create rollout checklist",
+                status="Planned",
+                status_type="unstarted",
+                priority=4,
+                priority_label="Low",
+                url="https://linear.app/i-4",
+                milestone_id="ms-1",
+            )
+        )
+        factory = MockVolundrFactory(adapters=[mock_volundr])
+        app = _make_test_app(mock_tracker, saga_repo, mock_volundr, factory, MockDispatcherRepo())
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/dispatch/queue")
+        assert resp.status_code == 200
+        ids = [item["identifier"] for item in resp.json()]
+        assert "ALPHA-4" in ids
 
     def test_queue_sorted_by_priority(self, client: TestClient):
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -1003,3 +1100,59 @@ class TestListClusters:
         resp = client.get("/api/v1/tyr/dispatch/clusters")
         data = resp.json()
         assert data[0]["name"] == "conn-x"
+
+
+class TestDispatchAliases:
+    def _client(self, tracker: DispatchAliasTracker, service: AsyncMock) -> TestClient:
+        app = FastAPI()
+        app.include_router(create_dispatch_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [tracker]
+        app.dependency_overrides[resolve_dispatch_service] = lambda: service
+        app.dependency_overrides[resolve_dispatcher_repo] = lambda: MockDispatcherRepo()
+        app.state.settings = _make_settings()
+        return TestClient(app)
+
+    def test_dispatch_single_raid_alias(self) -> None:
+        tracker = DispatchAliasTracker()
+        service = AsyncMock()
+        service.dispatch_issues.return_value = [
+            DispatchResult(
+                issue_id="i-1",
+                session_id="sess-1",
+                session_name="dispatch-me",
+                status="running",
+            )
+        ]
+        client = self._client(tracker, service)
+
+        response = client.post("/api/v1/tyr/dispatch/i-1", headers=_auth_headers())
+
+        assert response.status_code == 202
+        dispatched_items = service.dispatch_issues.await_args.kwargs["items"]
+        assert dispatched_items[0].issue_id == "i-1"
+        assert dispatched_items[0].repo == "org/repo"
+
+    def test_dispatch_batch_alias_reports_dispatches_and_failures(self) -> None:
+        tracker = DispatchAliasTracker()
+        service = AsyncMock()
+        service.dispatch_issues.return_value = [
+            DispatchResult(
+                issue_id="i-1",
+                session_id="sess-1",
+                session_name="dispatch-me",
+                status="running",
+            )
+        ]
+        client = self._client(tracker, service)
+
+        response = client.post(
+            "/api/v1/tyr/dispatch/batch",
+            json={"raid_ids": ["i-1", "missing"]},
+            headers=_auth_headers(),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "dispatched": ["i-1"],
+            "failed": [{"raidId": "missing", "reason": "raid issue not found in tracker"}],
+        }

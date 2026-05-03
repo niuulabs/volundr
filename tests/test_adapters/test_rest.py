@@ -79,7 +79,9 @@ def app(
 @pytest.fixture
 def client(app: FastAPI) -> TestClient:
     """Create a test client."""
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 class TestSessionCreate:
@@ -168,6 +170,21 @@ class TestSessionResponse:
         assert response.tokens_used == 1000
         assert response.pod_name == "volundr-abc123"
         assert session.created_at.isoformat() in response.created_at
+
+    def test_from_session_normalizes_loopback_chat_endpoint(self):
+        """Loopback chat endpoints should prefer localhost for browser clients."""
+        session = Session(
+            id=uuid4(),
+            name="Test",
+            model="claude-sonnet-4",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+            status=SessionStatus.RUNNING,
+            chat_endpoint="ws://127.0.0.1:8080/s/example/session",
+        )
+
+        response = SessionResponse.from_session(session)
+
+        assert response.chat_endpoint == "ws://localhost:8080/s/example/session"
 
 
 class TestListSessions:
@@ -612,9 +629,8 @@ class TestListModels:
         app = FastAPI()
         router = create_router(service, stats_service, pricing_provider=None)
         app.include_router(router)
-        client = TestClient(app)
-
-        response = client.get("/api/v1/volundr/models")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/volundr/models")
         assert response.status_code == 503
         assert "not available" in response.json()["detail"].lower()
 
@@ -672,9 +688,8 @@ class TestGetStats:
         app = FastAPI()
         router = create_router(service, stats_service=None)
         app.include_router(router)
-        client = TestClient(app)
-
-        response = client.get("/api/v1/volundr/stats")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/volundr/stats")
         assert response.status_code == 503
         assert "not available" in response.json()["detail"].lower()
 
@@ -685,9 +700,8 @@ class TestGetStats:
         app = FastAPI()
         router = create_router(service, stats_svc)
         app.include_router(router)
-        client = TestClient(app)
-
-        response = client.get("/api/v1/volundr/stats")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/volundr/stats")
         assert response.status_code == 200
         data = response.json()
         assert data["active_sessions"] == 0
@@ -722,7 +736,9 @@ class TestListProviders:
         app = FastAPI()
         router = create_router(service, repo_service=repo_service)
         app.include_router(router)
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_list_providers_success(self, providers_client: TestClient):
         """Returns list of configured providers."""
@@ -742,9 +758,8 @@ class TestListProviders:
         app = FastAPI()
         router = create_router(service, repo_service=None)
         app.include_router(router)
-        client = TestClient(app)
-
-        response = client.get("/api/v1/volundr/providers")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/volundr/providers")
         assert response.status_code == 503
         assert "not available" in response.json()["detail"].lower()
 
@@ -791,7 +806,9 @@ class TestListRepos:
 
         app = FastAPI()
         app.include_router(create_repos_router(repo_service))
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_list_repos_success(self, repos_client: TestClient):
         """Returns repos grouped by provider name."""
@@ -811,9 +828,8 @@ class TestListRepos:
 
         app = FastAPI()
         app.include_router(create_repos_router(None))
-        client = TestClient(app)
-
-        response = client.get("/api/v1/niuu/repos")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/niuu/repos")
         assert response.status_code == 503
         assert "not available" in response.json()["detail"].lower()
 
@@ -826,8 +842,7 @@ class TestListRepos:
         repo_service = RepoService(registry)
         app = FastAPI()
         app.include_router(create_repos_router(repo_service))
-        client = TestClient(app)
-
-        response = client.get("/api/v1/niuu/repos")
+        with TestClient(app) as client:
+            response = client.get("/api/v1/niuu/repos")
         assert response.status_code == 200
         assert response.json() == {}

@@ -5,6 +5,7 @@ import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
@@ -12,9 +13,11 @@ from fastapi.testclient import TestClient
 from skuld.broker import (
     Broker,
     _log_buffer,
+    _SendMessageRequest,
     _TokenRedactFilter,
     app,
     broker,
+    send_message_to_session,
 )
 from skuld.config import SkuldSettings
 from skuld.transports import (
@@ -602,9 +605,9 @@ class TestFastAPIEndpoints:
 
     @pytest.fixture
     def client(self):
-        from fastapi.testclient import TestClient
-
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_health_endpoint(self, client, monkeypatch):
         broker.session_id = "test-123"
@@ -691,7 +694,9 @@ class TestCORSMiddleware:
 
     @pytest.fixture
     def client(self):
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_cors_allows_all_origins(self, client):
         """CORS preflight should succeed for any origin."""
@@ -731,7 +736,11 @@ class TestReportUsage:
             session={"id": "sess-abc", "workspace_dir": str(tmp_path)},
             volundr_api_url="http://volundr.test:80",
         )
-        return Broker(settings=settings)
+        test_broker = Broker(settings=settings)
+        yield test_broker
+        if isinstance(test_broker._http_client, httpx.AsyncClient):
+            asyncio.run(test_broker._http_client.aclose())
+            test_broker._http_client = None
 
     @pytest.mark.asyncio
     async def test_report_usage_posts_to_api(self, test_broker):
@@ -757,12 +766,29 @@ class TestReportUsage:
 
         mock_client.post.assert_called_once()
         args, kwargs = mock_client.post.call_args
-        assert args[0] == "/api/v1/volundr/sessions/sess-abc/usage"
+        assert args[0] == "/api/v1/forge/sessions/sess-abc/usage"
         payload = kwargs["json"]
         assert payload["tokens"] == 3 + 12 + 100 + 50
         assert payload["provider"] == "cloud"
         assert payload["model"] == "claude-opus-4-5-20251101"
         assert payload["cost"] == 0.05
+
+    @pytest.mark.asyncio
+    async def test_report_activity_state_posts_to_forge_route(self, test_broker):
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.url = "http://volundr.test/api/v1/forge/sessions/sess-abc/activity"
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        test_broker._http_client = mock_client
+        test_broker.volundr_api_url = "http://volundr.test:80"
+
+        await test_broker._report_activity_state("active")
+
+        mock_client.post.assert_called_once()
+        args, kwargs = mock_client.post.call_args
+        assert args[0] == "/api/v1/forge/sessions/sess-abc/activity"
+        assert kwargs["json"]["state"] == "active"
 
     @pytest.mark.asyncio
     async def test_report_usage_skips_when_no_url(self, tmp_path):
@@ -1226,14 +1252,14 @@ class TestReportChronicle:
         assert mock_client.post.call_count == 2
         chronicle_call = mock_client.post.call_args_list[0]
         args, kwargs = chronicle_call
-        assert args[0] == "/api/v1/volundr/sessions/sess-chronicle/chronicle"
+        assert args[0] == "/api/v1/forge/sessions/sess-chronicle/chronicle"
         payload = kwargs["json"]
         assert "duration_seconds" in payload
         assert payload["key_changes"] == ["/src/main.py"]
 
         pipeline_call = mock_client.post.call_args_list[1]
         p_args, p_kwargs = pipeline_call
-        assert p_args[0] == "/api/v1/volundr/events"
+        assert p_args[0] == "/api/v1/forge/events"
         assert p_kwargs["json"]["event_type"] == "session_stop"
 
     @pytest.mark.asyncio
@@ -1250,6 +1276,26 @@ class TestReportChronicle:
 
         await b._report_chronicle()
         mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_message_to_session_uses_forge_route(self, monkeypatch):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        monkeypatch.setattr(broker, "volundr_api_url", "http://volundr.test:80")
+        monkeypatch.setattr(broker, "_get_http_client", AsyncMock(return_value=mock_client))
+
+        response = await send_message_to_session(
+            _SendMessageRequest(session_id="sess-target", content="hello from broker")
+        )
+
+        assert response == {"status": "sent", "target_session_id": "sess-target"}
+        mock_client.post.assert_awaited_once_with(
+            "/api/v1/forge/sessions/sess-target/messages",
+            json={"content": "hello from broker"},
+        )
 
     @pytest.mark.asyncio
     async def test_report_chronicle_skips_when_no_turns(self, test_broker):
@@ -1606,7 +1652,9 @@ class TestServiceAPIEndpoints:
 
     @pytest.fixture
     def client(self):
-        return TestClient(app)
+        client = TestClient(app)
+        yield client
+        client.close()
 
     def test_create_service_no_manager(self, client):
         broker.service_manager = None
@@ -2203,7 +2251,7 @@ class TestPipelineEventEmission:
 
         mock_client.post.assert_called_once()
         args, kwargs = mock_client.post.call_args
-        assert args[0] == "/api/v1/volundr/events"
+        assert args[0] == "/api/v1/forge/events"
         payload = kwargs["json"]
         assert payload["event_type"] == "file_modified"
         assert payload["session_id"] == "sess-pipeline"
@@ -2252,7 +2300,7 @@ class TestPipelineEventEmission:
 
         # Should have called timeline + pipeline events
         calls = mock_client.post.call_args_list
-        pipeline_calls = [c for c in calls if c[0][0] == "/api/v1/volundr/events"]
+        pipeline_calls = [c for c in calls if c[0][0] == "/api/v1/forge/events"]
         assert len(pipeline_calls) == 1
         payload = pipeline_calls[0][1]["json"]
         assert payload["event_type"] == "session_start"
@@ -2338,10 +2386,9 @@ class TestTokenRedactFilter:
         f.filter(record)
         assert record.msg == "first access_token=[REDACTED] second access_token=[REDACTED]"
 
-    def test_filter_attached_during_lifespan(self):
+    @pytest.mark.asyncio
+    async def test_filter_attached_during_lifespan(self):
         """Lifespan attaches redact filter to uvicorn loggers."""
-        import asyncio
-
         from skuld.broker import lifespan
 
         async def check():
@@ -2356,7 +2403,7 @@ class TestTokenRedactFilter:
                             has_redact = any(isinstance(f, _TokenRedactFilter) for f in lgr.filters)
                             assert has_redact, f"{name} missing _TokenRedactFilter"
 
-        asyncio.run(check())
+        await check()
 
 
 # ---------------------------------------------------------------------------

@@ -152,7 +152,7 @@ def create_integrations_router() -> APIRouter:
         )
         if not test_result.success:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Connection test failed: {test_result.message}",
             )
 
@@ -266,14 +266,12 @@ def create_telegram_setup_router(
 ) -> APIRouter:
     """Create router for the Telegram deeplink setup endpoint."""
     router = APIRouter(
-        prefix="/api/v1/tyr/telegram",
+        prefix="/api/v1/tyr",
         tags=["Tyr Telegram"],
     )
 
-    @router.get(
-        "/setup",
-        response_model=TelegramSetupResponse,
-    )
+    @router.get("/telegram/setup", response_model=TelegramSetupResponse)
+    @router.get("/integrations/telegram/setup", response_model=TelegramSetupResponse)
     async def telegram_setup(
         principal: Principal = Depends(extract_principal),
     ) -> TelegramSetupResponse:

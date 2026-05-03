@@ -718,6 +718,8 @@ class TestTelegramChannelMocked:
             }
             await channel.send_event(delta_event)
             mock_create.assert_called_once()
+            scheduled = mock_create.call_args[0][0]
+            scheduled.close()
 
     @pytest.mark.asyncio
     async def test_streaming_reuses_active_flush_task(self, channel):

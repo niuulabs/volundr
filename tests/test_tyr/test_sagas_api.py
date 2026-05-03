@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tyr.api.sagas import create_sagas_router, resolve_saga_repo
+from tyr.api.phases import create_saga_phases_router
+from tyr.api.sagas import create_sagas_router, resolve_saga_repo, resolve_volundr
 from tyr.api.tracker import resolve_trackers
 from tyr.config import AuthConfig
 from tyr.domain.models import (
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
     Saga,
     SagaStatus,
     TrackerIssue,
@@ -108,20 +113,53 @@ def mock_tracker() -> MockTracker:
 @pytest.fixture
 def saga_repo() -> MockSagaRepo:
     repo = MockSagaRepo()
-    repo.sagas.append(
-        Saga(
+    saga = Saga(
+        id=uuid4(),
+        tracker_id="proj-1",
+        tracker_type="mock",
+        slug="alpha",
+        name="Alpha",
+        repos=["org/repo"],
+        feature_branch="feat/alpha",
+        status=SagaStatus.ACTIVE,
+        confidence=0.0,
+        created_at=datetime.now(UTC),
+        base_branch="dev",
+        owner_id="dev-user",
+    )
+    repo.sagas.append(saga)
+    phase = Phase(
+        id=uuid4(),
+        saga_id=saga.id,
+        tracker_id="ms-1",
+        number=1,
+        name="Phase 1",
+        status=PhaseStatus.ACTIVE,
+        confidence=0.8,
+    )
+    repo.phases.append(phase)
+    repo.raids.append(
+        Raid(
             id=uuid4(),
-            tracker_id="proj-1",
-            tracker_type="mock",
-            slug="alpha",
-            name="Alpha",
-            repos=["org/repo"],
-            feature_branch="feat/alpha",
-            status=SagaStatus.ACTIVE,
-            confidence=0.0,
+            phase_id=phase.id,
+            tracker_id="A-2",
+            name="Open task",
+            description="",
+            acceptance_criteria=["Ship it"],
+            declared_files=["src/feature.py"],
+            estimate_hours=2.0,
+            status=RaidStatus.REVIEW,
+            confidence=0.7,
+            session_id="sess-1",
+            branch="feat/alpha",
+            chronicle_summary="done",
+            pr_url=None,
+            pr_id=None,
+            retry_count=1,
             created_at=datetime.now(UTC),
-            base_branch="dev",
-            owner_id="dev-user",
+            updated_at=datetime.now(UTC),
+            reviewer_session_id="reviewer-1",
+            review_round=2,
         )
     )
     return repo
@@ -131,6 +169,7 @@ def saga_repo() -> MockSagaRepo:
 def client(mock_tracker: MockTracker, saga_repo: MockSagaRepo) -> TestClient:
     app = FastAPI()
     app.include_router(create_sagas_router())
+    app.include_router(create_saga_phases_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.state.settings = _dev_settings()
@@ -154,8 +193,12 @@ class TestListSagas:
         assert saga["repos"] == ["org/repo"]
         assert saga["milestone_count"] == 2
         assert saga["issue_count"] == 3
-        assert saga["status"] == "started"
+        assert saga["status"] == "active"
         assert saga["url"] == "https://linear.app/test/project/alpha-abc123"
+        assert saga["base_branch"] == "dev"
+        assert saga["confidence"] == 0.0
+        assert saga["created_at"]
+        assert saga["phase_summary"] == {"total": 1, "completed": 0}
 
     def test_empty_when_no_sagas(self, mock_tracker: MockTracker):
         app = FastAPI()
@@ -177,6 +220,11 @@ class TestGetSaga:
         data = resp.json()
         assert data["name"] == "Alpha"
         assert data["description"] == "First project"
+        assert data["base_branch"] == "dev"
+        assert data["confidence"] == 0.0
+        assert data["created_at"]
+        assert data["status"] == "active"
+        assert data["phase_summary"] == {"total": 1, "completed": 0}
         assert len(data["phases"]) == 3  # 2 milestones + unassigned
         assert data["phases"][0]["name"] == "Phase 1"
         assert data["phases"][1]["name"] == "Phase 2"
@@ -197,6 +245,39 @@ class TestGetSaga:
     def test_not_found(self, client: TestClient):
         resp = client.get(f"/api/v1/tyr/sagas/{uuid4()}")
         assert resp.status_code == 404
+
+    def test_returns_persisted_phase_wire_shape(self, client: TestClient, saga_repo: MockSagaRepo):
+        saga_id = str(saga_repo.sagas[0].id)
+
+        resp = client.get(f"/api/v1/tyr/sagas/{saga_id}/phases")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["tracker_id"] == "ms-1"
+        assert data[0]["status"] == "active"
+        assert data[0]["raids"][0]["tracker_id"] == "A-2"
+        assert data[0]["raids"][0]["reviewer_session_id"] == "reviewer-1"
+        assert data[0]["raids"][0]["review_round"] == 2
+
+    def test_synthesizes_tracker_backed_phases_when_repo_has_none(
+        self,
+        client: TestClient,
+        saga_repo: MockSagaRepo,
+    ):
+        saga_repo.phases.clear()
+        saga_repo.raids.clear()
+        saga_id = str(saga_repo.sagas[0].id)
+
+        resp = client.get(f"/api/v1/tyr/sagas/{saga_id}/phases")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 3
+        assert data[0]["name"] == "Phase 1"
+        assert data[0]["raids"][0]["name"] == "R1"
+        assert data[1]["name"] == "Phase 2"
+        assert data[2]["name"] == "Unassigned"
 
 
 class TestGetSagaErrors:
@@ -245,6 +326,41 @@ class TestGetSagaErrors:
         assert len(data) == 1
         # Falls back to DB name
         assert data[0]["name"] == "Alpha"
+
+
+class TestSpawnPlanSession:
+    def test_defaults_base_branch_to_main(self, mock_tracker: MockTracker) -> None:
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        mock_volundr = AsyncMock()
+        mock_volundr.list_integration_ids.return_value = []
+        mock_volundr.spawn_session.return_value = MagicMock(
+            id="plan-1",
+            chat_endpoint="/api/v1/volundr/sessions/plan-1/messages",
+        )
+        app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        settings = _dev_settings()
+        settings.dispatch.default_model = "claude-opus"
+        settings.dispatch.default_system_prompt = "dispatch-system"
+        settings.planner.planner_system_prompt = ""
+        app.state.settings = settings
+
+        client = TestClient(app)
+        resp = client.post(
+            "/api/v1/tyr/sagas/plan",
+            json={"spec": "Ship the dashboard", "repo": "niuulabs/volundr"},
+        )
+
+        assert resp.status_code == 201
+        assert resp.json() == {
+            "session_id": "plan-1",
+            "chat_endpoint": "/api/v1/volundr/sessions/plan-1/messages",
+        }
+        spawn_request = mock_volundr.spawn_session.await_args.args[0]
+        assert spawn_request.base_branch == "main"
+        assert spawn_request.repo == "niuulabs/volundr"
 
 
 class TestDeleteSaga:

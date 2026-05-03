@@ -14,30 +14,52 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
-from volundr.adapters.inbound.rest_audit import create_audit_router
-from volundr.adapters.inbound.rest_credentials import create_credentials_router
+from volundr.adapters.inbound.rest_audit import create_audit_router, create_canonical_audit_router
+from volundr.adapters.inbound.rest_credentials import (
+    create_canonical_credentials_router,
+    create_credentials_router,
+    create_legacy_secret_store_router,
+)
 from volundr.adapters.inbound.rest_events import create_events_router
-from volundr.adapters.inbound.rest_features import create_features_router
+from volundr.adapters.inbound.rest_features import (
+    create_feature_catalog_router,
+    create_features_router,
+)
 from volundr.adapters.inbound.rest_git import create_git_router
-from volundr.adapters.inbound.rest_integrations import create_integrations_router
-from volundr.adapters.inbound.rest_issues import create_issues_router
-from volundr.adapters.inbound.rest_oauth import create_oauth_router
+from volundr.adapters.inbound.rest_integrations import (
+    create_canonical_integrations_router,
+    create_integrations_router,
+)
+from volundr.adapters.inbound.rest_issues import (
+    create_canonical_issues_router,
+    create_issues_router,
+)
+from volundr.adapters.inbound.rest_oauth import create_canonical_oauth_router, create_oauth_router
 from volundr.adapters.inbound.rest_presets import create_presets_router
 from volundr.adapters.inbound.rest_profiles import create_profiles_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
 from volundr.adapters.inbound.rest_resources import create_resources_router
-from volundr.adapters.inbound.rest_secrets import create_secrets_router
-from volundr.adapters.inbound.rest_tenants import create_tenants_router
+from volundr.adapters.inbound.rest_secrets import (
+    create_canonical_secrets_router,
+    create_secrets_router,
+)
+from volundr.adapters.inbound.rest_tenants import create_identity_router, create_tenants_router
+from volundr.adapters.inbound.rest_tracker import (
+    create_canonical_tracker_router,
+    create_tracker_router,
+)
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
 from volundr.adapters.outbound.config_mcp_servers import ConfigMCPServerProvider
 from volundr.adapters.outbound.config_profiles import ConfigProfileProvider
 from volundr.adapters.outbound.config_templates import ConfigTemplateProvider
 from volundr.adapters.outbound.git_registry import create_git_registry
+from volundr.adapters.outbound.linear import LinearAdapter
 from volundr.adapters.outbound.memory_secrets import InMemorySecretManager
 from volundr.adapters.outbound.pg_event_sink import PostgresEventSink
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
 from volundr.adapters.outbound.postgres_chronicles import PostgresChronicleRepository
 from volundr.adapters.outbound.postgres_integrations import PostgresIntegrationRepository
+from volundr.adapters.outbound.postgres_mappings import PostgresMappingRepository
 from volundr.adapters.outbound.postgres_presets import PostgresPresetRepository
 from volundr.adapters.outbound.postgres_prompts import PostgresPromptRepository
 from volundr.adapters.outbound.postgres_stats import PostgresStatsRepository
@@ -58,6 +80,7 @@ from volundr.domain.services import (
     StatsService,
     TenantService,
     TokenService,
+    TrackerService,
 )
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.feature import FeatureService
@@ -235,8 +258,26 @@ def _create_contributors(
     can accept the ports they need and ignore others via **_extra.
     """
     from volundr.adapters.outbound.contributors.local_mount import LocalMountContributor
+    from volundr.adapters.outbound.contributors.session_def import SessionDefinitionContributor
 
     contributors: list[SessionContributor] = []
+
+    # Auto-wire SessionDefinitionContributor first so definition defaults
+    # (broker.cliType, transportAdapter, etc.) are the base layer that
+    # later contributors (templates, profiles, resources) can override.
+    if settings.session_definitions:
+        contributors.append(
+            SessionDefinitionContributor(
+                definitions=settings.session_definitions,
+                default_definition=settings.default_definition,
+            )
+        )
+        logger.info(
+            "Session contributor: session_definition (auto-wired, %d definitions, default=%s)",
+            len(settings.session_definitions),
+            settings.default_definition or "(none)",
+        )
+
     for cfg in settings.session_contributors:
         cls = import_class(cfg.adapter)
         resolved_kwargs = _resolve_secret_kwargs(cfg.kwargs, cfg.secret_kwargs_env)
@@ -668,7 +709,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(router)
 
-            profiles_router = create_profiles_router(profile_service, template_service)
+            profiles_router = create_profiles_router(
+                profile_service, template_service, settings.session_definitions
+            )
             app.include_router(profiles_router)
 
             # Resource discovery endpoint
@@ -679,6 +722,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # MCP servers and secrets
             mcp_provider = ConfigMCPServerProvider(settings.mcp_servers)
             secret_manager = InMemorySecretManager()
+            canonical_secrets_router = create_canonical_secrets_router(mcp_provider, secret_manager)
+            app.include_router(canonical_secrets_router)
             secrets_router = create_secrets_router(mcp_provider, secret_manager)
             app.include_router(secrets_router)
 
@@ -724,8 +769,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from volundr.adapters.inbound.auth import extract_principal as _extract_principal
             from volundr.adapters.inbound.rest_pats import create_pats_router
 
-            pats_router = create_pats_router(_extract_principal)
+            tokens_router = create_pats_router(_extract_principal, prefix="/api/v1/tokens")
+            app.include_router(tokens_router)
+            pats_router = create_pats_router(
+                _extract_principal,
+                prefix="/api/v1/users/tokens",
+                deprecated=True,
+                canonical_prefix="/api/v1/tokens",
+            )
             app.include_router(pats_router)
+            volundr_tokens_router = create_pats_router(
+                _extract_principal,
+                prefix="/api/v1/volundr/tokens",
+                deprecated=True,
+                canonical_prefix="/api/v1/tokens",
+            )
+            app.include_router(volundr_tokens_router)
 
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
@@ -745,6 +804,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.local_git_service = local_git_service
 
             # Tenant and identity management
+            identity_router = create_identity_router(tenant_service)
+            app.include_router(identity_router)
             tenants_router = create_tenants_router(tenant_service)
             app.include_router(tenants_router)
 
@@ -761,6 +822,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     if fc.key in _mini_disabled:
                         fc.default_enabled = False
             feature_service = FeatureService(pool, feature_configs)
+            feature_catalog_router = create_feature_catalog_router(feature_service)
+            app.include_router(feature_catalog_router)
             features_router = create_features_router(feature_service)
             app.include_router(features_router)
             app.state.feature_service = feature_service
@@ -770,10 +833,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 store=credential_store,
                 strategies=SecretMountStrategyRegistry(),
             )
+            canonical_credentials_router = create_canonical_credentials_router(
+                credential_service,
+            )
+            app.include_router(canonical_credentials_router)
             credentials_router = create_credentials_router(
                 credential_service,
             )
             app.include_router(credentials_router)
+            legacy_secret_store_router = create_legacy_secret_store_router(
+                credential_service,
+            )
+            app.include_router(legacy_secret_store_router)
 
             # Workspace management — PVCs are the source of truth
             workspace_service = WorkspaceService(storage_adapter)
@@ -783,6 +854,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from volundr.domain.services.tracker_factory import TrackerFactory
 
             tracker_factory = TrackerFactory(credential_store)
+            mapping_repository = PostgresMappingRepository(pool)
+            default_tracker = None
+            if settings.linear.enabled and settings.linear.api_key:
+                default_tracker = LinearAdapter(api_key=settings.linear.api_key)
+            tracker_service = TrackerService(
+                default_tracker,
+                mapping_repository,
+                integration_repo=integration_repo,
+                tracker_factory=tracker_factory,
+            )
 
             # Seed Linear integration from config so the integration-based
             # endpoints (/issues/search) find it in the DB.
@@ -795,6 +876,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 logger.info("Linear integration seeded from config")
 
             # Integration management endpoints
+            canonical_integrations_router = create_canonical_integrations_router(
+                integration_repo,
+                tracker_factory,
+                registry=integration_registry,
+                credential_store=credential_store,
+            )
+            app.include_router(canonical_integrations_router)
+
             integrations_router = create_integrations_router(
                 integration_repo,
                 tracker_factory,
@@ -804,6 +893,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(integrations_router)
 
             # OAuth integration endpoints
+            canonical_oauth_router = create_canonical_oauth_router(
+                oauth_config=settings.oauth,
+                integration_registry=integration_registry,
+                credential_store=credential_store,
+                integration_repo=integration_repo,
+            )
+            app.include_router(canonical_oauth_router)
+
             oauth_router = create_oauth_router(
                 oauth_config=settings.oauth,
                 integration_registry=integration_registry,
@@ -813,11 +910,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(oauth_router)
 
             # Generic issue endpoints
+            canonical_issues_router = create_canonical_issues_router(
+                integration_repo,
+                tracker_factory,
+            )
+            app.include_router(canonical_issues_router)
+
             issues_router = create_issues_router(
                 integration_repo,
                 tracker_factory,
             )
             app.include_router(issues_router)
+
+            tracker_router = create_tracker_router(
+                tracker_service=tracker_service,
+            )
+            app.include_router(tracker_router)
+
+            canonical_tracker_router = create_canonical_tracker_router(
+                tracker_service=tracker_service,
+            )
+            app.include_router(canonical_tracker_router)
 
             app.state.user_integration_service = user_integration_service
 
@@ -899,6 +1012,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 audit_subscriber = AuditSubscriber(sleipnir_bus, audit_repository)
                 await audit_subscriber.start()
 
+                canonical_audit_router = create_canonical_audit_router(audit_repository)
+                app.include_router(canonical_audit_router)
                 audit_router = create_audit_router(audit_repository)
                 app.include_router(audit_router)
                 logger.info("Audit log subscriber started")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -238,7 +238,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                 "owner_id": str(session.owner_id) if session.owner_id else None,
                 "tenant_id": str(session.tenant_id) if session.tenant_id else None,
             },
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
     def create_session_deleted_event(self, session_id: UUID) -> RealtimeEvent:
@@ -253,7 +253,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
         return RealtimeEvent(
             type=EventType.SESSION_DELETED,
             data={"id": str(session_id)},
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
     def create_stats_event(self, stats: Stats) -> RealtimeEvent:
@@ -275,7 +275,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                 "cloud_tokens": stats.cloud_tokens,
                 "cost_today": float(stats.cost_today),
             },
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
     def create_heartbeat_event(self) -> RealtimeEvent:
@@ -287,7 +287,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
         return RealtimeEvent(
             type=EventType.HEARTBEAT,
             data={},
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
     async def publish_session_created(self, session: Session) -> None:
@@ -389,7 +389,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                 ],
                 "token_burn": timeline.token_burn,
             },
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
         logger.info(
             "SSE broadcast chronicle_event: session=%s, type=%s, t=%d",

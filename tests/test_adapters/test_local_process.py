@@ -761,10 +761,41 @@ class TestStartStop:
             result = await manager.start(git_session, default_spec)
 
         assert isinstance(result, PodStartResult)
-        assert "ws://127.0.0.1:" in result.chat_endpoint
+        assert "ws://localhost:" in result.chat_endpoint
         assert str(git_session.id) in result.chat_endpoint
         assert result.code_endpoint == "file:///tmp/ws"
         assert result.pod_name.startswith("local-")
+
+    async def test_set_skuld_registry_rehydrates_running_sessions(
+        self,
+        tmp_workspaces: Path,
+        tmp_state_file: Path,
+    ) -> None:
+        tmp_state_file.write_text(
+            json.dumps(
+                {
+                    "sess-1": {
+                        "session_id": "sess-1",
+                        "pid": 1234,
+                        "port": 9100,
+                        "workspace": str(tmp_workspaces / "sess-1"),
+                        "state": "running",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.object(LocalProcessPodManager, "_is_process_alive", return_value=True):
+            mgr = LocalProcessPodManager(
+                workspaces_dir=str(tmp_workspaces),
+                claude_binary="/usr/bin/fake-claude",
+                state_file=str(tmp_state_file),
+            )
+        registry = MagicMock()
+
+        mgr.set_skuld_registry(registry)
+
+        registry.register.assert_called_once_with("sess-1", 9100)
 
     async def test_start_tracks_process(
         self,
