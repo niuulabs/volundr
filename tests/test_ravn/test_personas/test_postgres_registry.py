@@ -5,8 +5,27 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from ravn.adapters.personas.loader import PersonaConfig
-from ravn.adapters.personas.postgres_registry import PostgresPersonaRegistry
+from ravn.adapters.personas.postgres_registry import (
+    PostgresPersonaRegistry,
+    _config_to_payload,
+    _default_payload,
+    _humanize_name,
+    _normalize_consumes_events,
+    _normalize_executor,
+    _normalize_letter,
+    _normalize_non_negative_int,
+    _normalize_optional_number,
+    _normalize_optional_string,
+    _normalize_params,
+    _normalize_payload,
+    _normalize_permission_mode,
+    _normalize_schema,
+    _parse_payload,
+    _payload_to_config,
+)
 
 
 def _mock_row(**overrides):
@@ -257,3 +276,82 @@ class TestParsePayload:
 
         assert len(result) == 1
         assert result[0].payload["name"] == "custom-agent"
+
+
+class TestHelperNormalization:
+    def test_parse_payload_and_default_helpers_cover_invalid_inputs(self):
+        assert _parse_payload(None) is None
+        assert _parse_payload(json.dumps(["not", "a", "dict"])) is None
+        assert _parse_payload({"name": "   "}) is None
+        assert _humanize_name("code_reviewer-agent") == "Code reviewer agent"
+        assert _humanize_name("   ") == "Custom persona"
+        assert _default_payload("custom-agent")["name"] == "custom-agent"
+        assert _normalize_letter("", "!!!") == "P"
+        assert _normalize_non_negative_int("bad", default=7) == 7
+        assert _normalize_non_negative_int(-3, default=7) == 0
+        assert _normalize_optional_number("1.5") == 1.5
+        assert _normalize_optional_number("bad") is None
+        assert _normalize_optional_string("  hi  ") == "hi"
+        assert _normalize_optional_string("") is None
+        assert _normalize_params({"a": 1}) == {"a": 1}
+        assert _normalize_params("bad") == {}
+        assert _normalize_schema({"x": " string ", "": "ignored", "y": ""}) == {"x": "string"}
+        assert _normalize_schema("bad") == {}
+        assert _normalize_permission_mode("") == "default"
+        assert _normalize_permission_mode("workspace-write") == "default"
+        assert _normalize_executor("bad", {"adapter": "x", "kwargs": {"k": 1}}) == {
+            "adapter": "x",
+            "kwargs": {"k": 1},
+        }
+        assert _normalize_executor({"adapter": "", "kwargs": {}}, {}) == {
+            "adapter": "",
+            "kwargs": {},
+        }
+        assert _normalize_consumes_events(
+            [{"name": " code.requested ", "injects": ["a", ""], "trust": "0.5"}, {}, "bad"]
+        ) == [{"name": "code.requested", "injects": ["a"], "trust": 0.5}]
+
+    def test_payload_roundtrip_normalizes_fallback_and_runtime_fields(self):
+        fallback = _BuiltinLoader().load("coding-agent")
+        assert fallback is not None
+
+        normalized = _normalize_payload(
+            {
+                "name": "coding-agent",
+                "letter": "zebra",
+                "allowed_tools": ["read", ""],
+                "forbidden_tools": ["rm"],
+                "permission_mode": "workspace-write",
+                "executor": {"adapter": "demo.Adapter", "kwargs": {"foo": "bar"}},
+                "iteration_budget": "9",
+                "llm_primary_alias": "fast",
+                "llm_thinking_enabled": True,
+                "llm_max_tokens": "2048",
+                "produces_event_type": "code.changed",
+                "produces_schema": {"file": "string", "": "bad"},
+                "consumes_events": [{"name": "code.requested", "injects": ["summary", "summary"]}],
+                "fan_in_strategy": "collect",
+                "fan_in_params": {"contributes_to": "summary"},
+            },
+            fallback=fallback,
+        )
+
+        assert normalized["letter"] == "Z"
+        assert normalized["permission_mode"] == "default"
+        assert normalized["executor"]["adapter"] == "demo.Adapter"
+        assert normalized["produces_schema"] == {"file": "string"}
+
+        config = _payload_to_config(normalized)
+        assert config.permission_mode == "workspace-write"
+        assert config.executor.adapter == "demo.Adapter"
+        assert config.fan_in.contributes_to == "summary"
+        assert config.consumes.injects == ["summary"]
+
+        payload = _config_to_payload(config)
+        assert payload["permission_mode"] == "default"
+        assert payload["executor"]["adapter"] == "demo.Adapter"
+        assert payload["consumes_events"] == [{"name": "code.requested"}]
+
+    def test_normalize_payload_requires_name(self):
+        with pytest.raises(ValueError, match="Persona name is required"):
+            _normalize_payload({})

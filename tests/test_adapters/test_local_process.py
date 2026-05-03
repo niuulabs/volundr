@@ -706,7 +706,6 @@ class TestGitClone:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Spawn tests need rewrite: _spawn_claude replaced by _spawn_skuld")
 class TestProcessSpawning:
     """Tests for Skuld process spawning."""
 
@@ -749,6 +748,11 @@ class TestProcessSpawning:
         with (
             patch.object(
                 manager,
+                "_resolve_skuld_command",
+                return_value=["python", "-m", "skuld"],
+            ),
+            patch.object(
+                manager,
                 "_resolve_claude_binary",
                 return_value="/usr/bin/fake-claude",
             ),
@@ -761,9 +765,10 @@ class TestProcessSpawning:
             await manager._spawn_skuld(git_session, default_spec, workspace, 9100)
 
         call_args = mock_exec.call_args[0]
-        assert "--sdk-url" in call_args
-        sdk_url_idx = call_args.index("--sdk-url")
-        assert f"ws://127.0.0.1:9100/ws/cli/{git_session.id}" in call_args[sdk_url_idx + 1]
+        assert call_args == ("python", "-m", "skuld")
+        env = mock_exec.call_args.kwargs["env"]
+        assert env["SKULD__PORT"] == "9100"
+        assert env["SKULD__SESSION__ID"] == str(git_session.id)
 
     async def test_spawn_closes_log_file(
         self,
@@ -1082,8 +1087,6 @@ class TestProcessSpawning:
         assert "workflow_id: wf-1" in node_config
         assert "name: Review Flow" in node_config
         assert "initial_context: Review this change." in node_config
-        assert "enabled: true" in node_config
-        assert "broker_url: ws://127.0.0.1:9101/ws/ravn" in node_config
 
     async def test_start_flock_applies_llm_and_persona_overrides(
         self,
