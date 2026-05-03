@@ -178,14 +178,15 @@ describe('LaunchWizard helpers', () => {
       metadata: {},
     };
 
-    expect(deriveSessionName(makeForm({ sessionName: 'My Session' }), template)).toBe(
-      'my-session',
-    );
+    expect(deriveSessionName(makeForm({ sessionName: 'My Session' }), template)).toBe('my-session');
     expect(deriveSessionName(makeForm({ sessionName: '', branch: 'feat/add-nav' }), template)).toBe(
       'add-nav',
     );
     expect(
-      deriveSessionName(makeForm({ sourcetype: 'local_mount', sessionName: '', mountPath: '~/code/niuu/app' }), template),
+      deriveSessionName(
+        makeForm({ sourcetype: 'local_mount', sessionName: '', mountPath: '~/code/niuu/app' }),
+        template,
+      ),
     ).toBe('app');
     expect(deriveSessionName(makeForm({ sourcetype: 'blank', sessionName: '' }), template)).toBe(
       'release-train',
@@ -203,13 +204,13 @@ describe('LaunchWizard helpers', () => {
       repo: '',
       branch: '',
     });
-    expect(buildSessionSource(makeForm({ sourcetype: 'local_mount', mountPath: '~/code/niuu' }))).toEqual(
-      {
-        type: 'local_mount',
-        local_path: '~/code/niuu',
-        paths: [{ host_path: '~/code/niuu', mount_path: '/workspace', read_only: false }],
-      },
-    );
+    expect(
+      buildSessionSource(makeForm({ sourcetype: 'local_mount', mountPath: '~/code/niuu' })),
+    ).toEqual({
+      type: 'local_mount',
+      local_path: '~/code/niuu',
+      paths: [{ host_path: '~/code/niuu', mount_path: '/workspace', read_only: false }],
+    });
 
     expect(buildResourceConfig(makeForm({ gpu: '0' }))).toEqual({ cpu: '2', memory: '8Gi' });
     expect(buildResourceConfig(makeForm({ cpu: ' ', mem: ' ', gpu: '0' }))).toBeUndefined();

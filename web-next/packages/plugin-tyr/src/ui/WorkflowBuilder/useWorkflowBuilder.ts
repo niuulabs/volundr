@@ -213,7 +213,8 @@ function hasMatchingEdge(
 ): boolean {
   const expected = `${eventType} -> ${eventType}`;
   return edges.some(
-    (edge) => edge.source === sourceId && edge.target === targetId && (edge.label ?? '') === expected,
+    (edge) =>
+      edge.source === sourceId && edge.target === targetId && (edge.label ?? '') === expected,
   );
 }
 
@@ -327,7 +328,8 @@ export function useWorkflowBuilder(
                 stageMembers: [{ personaId, budget: 40 }],
               })
             : node;
-        const autoEdges = stage.kind === 'stage' ? autoWireStageForPersona(prev, stage, personas) : [];
+        const autoEdges =
+          stage.kind === 'stage' ? autoWireStageForPersona(prev, stage, personas) : [];
         return {
           ...prev,
           nodes: [...prev.nodes, stage],
@@ -416,9 +418,7 @@ export function useWorkflowBuilder(
       const nodes =
         srcNode.kind === 'trigger'
           ? prev.nodes.map((node) =>
-              node.id === srcNode.id
-                ? { ...node, dispatchEvent: resolvedInputLabel }
-                : node,
+              node.id === srcNode.id ? { ...node, dispatchEvent: resolvedInputLabel } : node,
             )
           : prev.nodes;
       return { ...prev, nodes, edges: [...prev.edges, newEdge] };

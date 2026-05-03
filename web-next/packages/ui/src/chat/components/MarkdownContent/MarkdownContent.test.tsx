@@ -86,9 +86,7 @@ describe('MarkdownContent', () => {
   });
 
   it('renders outcome card for dashed outcome markers', () => {
-    render(
-      <MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---end---\nAfter'} />,
-    );
+    render(<MarkdownContent content={'Before\n---outcome---\nverdict: pass\n---end---\nAfter'} />);
     expect(screen.getByTestId('outcome-card')).toBeInTheDocument();
     expect(screen.getByText('Before')).toBeInTheDocument();
     expect(screen.getByText('After')).toBeInTheDocument();

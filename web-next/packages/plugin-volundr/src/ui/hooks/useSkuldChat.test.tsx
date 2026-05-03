@@ -196,7 +196,8 @@ describe('useSkuldChat', () => {
           fields: {
             verdict: 'conditional',
             summary: 'Needs a closer look.',
-            findings: '## Verified\n- **Route pair count**: 26\n- Use `/api/v1/credentials/secrets`',
+            findings:
+              '## Verified\n- **Route pair count**: 26\n- Use `/api/v1/credentials/secrets`',
           },
         }),
       );
@@ -205,9 +206,7 @@ describe('useSkuldChat', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]?.content).toContain('findings: |');
     expect(result.current.messages[0]?.content).toContain('  ## Verified');
-    expect(result.current.messages[0]?.content).toContain(
-      '  - **Route pair count**: 26',
-    );
+    expect(result.current.messages[0]?.content).toContain('  - **Route pair count**: 26');
   });
 
   it('captures room_agent_event frames per participant', async () => {

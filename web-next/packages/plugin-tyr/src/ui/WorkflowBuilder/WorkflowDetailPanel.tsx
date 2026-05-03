@@ -72,9 +72,10 @@ function memberIssuesForPersona(issues: WorkflowIssue[], persona: PersonaEntry |
 function triggerEventOptions(personas: PersonaEntry[], current: string): string[] {
   return [
     ...new Set(
-      [...personas.flatMap((persona) => persona.consumes ?? []), current || 'code.requested'].filter(
-        Boolean,
-      ),
+      [
+        ...personas.flatMap((persona) => persona.consumes ?? []),
+        current || 'code.requested',
+      ].filter(Boolean),
     ),
   ].sort();
 }

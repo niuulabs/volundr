@@ -35,9 +35,7 @@ describe('OutcomeCard', () => {
   it('renders markdown inside summary and field values', () => {
     render(
       <OutcomeCard
-        raw={
-          'verdict: pass\nsummary: See [docs](https://example.com)\ndetails: Use `npm test`'
-        }
+        raw={'verdict: pass\nsummary: See [docs](https://example.com)\ndetails: Use `npm test`'}
       />,
     );
     const link = screen.getByRole('link', { name: 'docs' });

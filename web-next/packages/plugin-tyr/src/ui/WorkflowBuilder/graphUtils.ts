@@ -6,7 +6,12 @@
  * Owner: plugin-tyr (WorkflowBuilder).
  */
 
-import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowStageNode } from '../../domain/workflow';
+import type {
+  Workflow,
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowStageNode,
+} from '../../domain/workflow';
 
 // ---------------------------------------------------------------------------
 // Node geometry constants

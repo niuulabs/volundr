@@ -78,9 +78,7 @@ describe('MeshCascadePanel', () => {
 
   it('renders a collapsed rail and expands from the header control', () => {
     const onToggleCollapsed = vi.fn();
-    render(
-      <MeshCascadePanel events={events} collapsed onToggleCollapsed={onToggleCollapsed} />,
-    );
+    render(<MeshCascadePanel events={events} collapsed onToggleCollapsed={onToggleCollapsed} />);
 
     expect(
       screen.getByRole('button', { name: /expand mesh cascade sidebar/i }),

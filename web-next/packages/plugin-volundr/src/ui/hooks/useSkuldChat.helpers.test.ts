@@ -65,7 +65,10 @@ describe('useSkuldChat helpers', () => {
     );
 
     const agentEvents = new Map([
-      ['peer-1', [{ id: 'evt-1', frameType: 'thought', data: 'inspect', timestamp: meshTimestamp }]],
+      [
+        'peer-1',
+        [{ id: 'evt-1', frameType: 'thought', data: 'inspect', timestamp: meshTimestamp }],
+      ],
     ]);
     const revived = reviveAgentEvents(serializeAgentEvents(agentEvents as never));
     expect(revived.get('peer-1')?.[0]?.timestamp).toEqual(meshTimestamp);
@@ -131,12 +134,7 @@ describe('useSkuldChat helpers', () => {
     const lines: string[] = [];
     pushOutcomeField(lines, 'summary', 'Looks good');
     pushOutcomeField(lines, 'details', 'line one\nline two');
-    expect(lines).toEqual([
-      'summary: Looks good',
-      'details: |',
-      '  line one',
-      '  line two',
-    ]);
+    expect(lines).toEqual(['summary: Looks good', 'details: |', '  line one', '  line two']);
 
     expect(
       formatOutcomeContent({

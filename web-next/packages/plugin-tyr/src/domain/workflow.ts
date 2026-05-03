@@ -17,7 +17,14 @@ import { z } from 'zod';
 // Nodes
 // ---------------------------------------------------------------------------
 
-export const workflowNodeKindSchema = z.enum(['stage', 'gate', 'cond', 'trigger', 'end', 'resource']);
+export const workflowNodeKindSchema = z.enum([
+  'stage',
+  'gate',
+  'cond',
+  'trigger',
+  'end',
+  'resource',
+]);
 export type WorkflowNodeKind = z.input<typeof workflowNodeKindSchema>;
 
 /** Spatial position for UI rendering (pixels from top-left). */

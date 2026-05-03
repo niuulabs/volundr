@@ -39,7 +39,9 @@ export function renderWithVolundr(
       const repos = await service.getRepos();
       const repo = repos.find(
         (item) =>
-          item.cloneUrl === repoUrl || item.url === repoUrl || `${item.org}/${item.name}` === repoUrl,
+          item.cloneUrl === repoUrl ||
+          item.url === repoUrl ||
+          `${item.org}/${item.name}` === repoUrl,
       );
       return repo?.branches ?? ['main'];
     },

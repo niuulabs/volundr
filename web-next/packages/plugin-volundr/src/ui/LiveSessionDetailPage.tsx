@@ -466,10 +466,14 @@ function DeleteSessionDialog({
                     isLocalStorage && 'niuu-live-delete-dialog__checkbox--disabled',
                   )}
                 >
-                  {cleanup.has('workspace_storage') ? <Check className="niuu-h-3 niuu-w-3" /> : null}
+                  {cleanup.has('workspace_storage') ? (
+                    <Check className="niuu-h-3 niuu-w-3" />
+                  ) : null}
                 </span>
                 <div>
-                  <div className="niuu-text-sm niuu-text-text-primary">Delete workspace storage</div>
+                  <div className="niuu-text-sm niuu-text-text-primary">
+                    Delete workspace storage
+                  </div>
                   <div className="niuu-mt-1 niuu-text-xs niuu-text-text-muted">
                     {isLocalStorage
                       ? 'Local mounted workspace — manage storage on your machine.'

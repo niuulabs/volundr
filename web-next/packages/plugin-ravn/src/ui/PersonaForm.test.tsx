@@ -178,13 +178,9 @@ describe('PersonaForm', () => {
 
   it('switches to codex streaming preset when selected', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
-      <PersonaForm
-        persona={{ ...MOCK_PERSONA, executor: undefined }}
-        onSave={onSave}
-      />,
-      { wrapper: wrap() },
-    );
+    render(<PersonaForm persona={{ ...MOCK_PERSONA, executor: undefined }} onSave={onSave} />, {
+      wrapper: wrap(),
+    });
 
     fireEvent.change(screen.getByDisplayValue('embedded ravn agent'), {
       target: { value: 'codex_ws' },

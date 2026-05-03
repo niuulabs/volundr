@@ -77,9 +77,7 @@ describe('MeshSidebar', () => {
       />,
     );
 
-    expect(
-      screen.getByRole('button', { name: /expand mesh peers sidebar/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand mesh peers sidebar/i })).toBeInTheDocument();
     expect(screen.queryByText('Mesh Peers')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /expand mesh peers sidebar/i }));

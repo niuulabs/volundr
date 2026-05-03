@@ -71,7 +71,10 @@ function shortenRepoLabel(value: string): string {
 }
 
 function toGroupTestId(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function sessionActivityTs(session: Session): number {

@@ -68,7 +68,9 @@ function wrap(sessionStore: ISessionStore = createMockSessionStore()) {
   );
 }
 
-function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'personaName' | 'state'>): Session {
+function makeSession(
+  overrides: Partial<Session> & Pick<Session, 'id' | 'personaName' | 'state'>,
+): Session {
   return {
     id: overrides.id,
     ravnId: overrides.ravnId ?? `ravn-${overrides.id}`,

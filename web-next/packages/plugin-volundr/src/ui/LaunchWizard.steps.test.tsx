@@ -98,8 +98,20 @@ const PRESET: VolundrPreset = {
 };
 
 const DEFINITIONS: SessionDefinition[] = [
-  { key: 'skuld-claude', displayName: 'Claude Code', description: '', labels: [], defaultModel: 'sonnet-primary' },
-  { key: 'skuld-codex', displayName: 'Codex', description: '', labels: [], defaultModel: 'gpt-test' },
+  {
+    key: 'skuld-claude',
+    displayName: 'Claude Code',
+    description: '',
+    labels: [],
+    defaultModel: 'sonnet-primary',
+  },
+  {
+    key: 'skuld-codex',
+    displayName: 'Codex',
+    description: '',
+    labels: [],
+    defaultModel: 'gpt-test',
+  },
 ];
 
 const REPOS: RepoRecord[] = [
@@ -306,14 +318,18 @@ describe('LaunchWizard step components', () => {
         clusterResources={CLUSTER_RESOURCES}
         presets={[PRESET]}
         selectedPreset={PRESET}
-        availableMcpServers={[{ name: 'filesystem', type: 'stdio', command: 'uvx', args: ['mcp-filesystem'] }]}
+        availableMcpServers={[
+          { name: 'filesystem', type: 'stdio', command: 'uvx', args: ['mcp-filesystem'] },
+        ]}
         sessionDefinitions={DEFINITIONS}
         onApplyPreset={onApplyPreset}
         onSavePreset={onSavePreset}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText('save as preset'), { target: { value: 'coverage-preset' } });
+    fireEvent.change(screen.getByPlaceholderText('save as preset'), {
+      target: { value: 'coverage-preset' },
+    });
     fireEvent.click(screen.getByText('save'));
     await waitFor(() => expect(onSavePreset).toHaveBeenCalledWith('coverage-preset'));
 
@@ -332,7 +348,9 @@ describe('LaunchWizard step components', () => {
     expect(update).toHaveBeenCalledWith({ setupScripts: [''] });
 
     fireEvent.click(screen.getByText('add custom server'));
-    fireEvent.change(screen.getByPlaceholderText('filesystem'), { target: { value: 'local-files' } });
+    fireEvent.change(screen.getByPlaceholderText('filesystem'), {
+      target: { value: 'local-files' },
+    });
     fireEvent.change(screen.getByPlaceholderText('uvx'), { target: { value: 'npx' } });
     fireEvent.change(screen.getByPlaceholderText('mcp-filesystem /workspace'), {
       target: { value: 'mcp-filesystem /workspace' },
@@ -384,7 +402,9 @@ describe('LaunchWizard step components', () => {
         clusterResources={CLUSTER_RESOURCES}
         presets={[PRESET]}
         selectedPreset={null}
-        availableMcpServers={[{ name: 'filesystem', type: 'stdio', command: 'uvx', args: ['mcp-filesystem'] }]}
+        availableMcpServers={[
+          { name: 'filesystem', type: 'stdio', command: 'uvx', args: ['mcp-filesystem'] },
+        ]}
         sessionDefinitions={DEFINITIONS}
         onApplyPreset={vi.fn()}
         onSavePreset={vi.fn(async () => {})}
