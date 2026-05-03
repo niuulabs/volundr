@@ -66,6 +66,51 @@
   text-decoration: underline;
 }
 
+.niuu-chat-md-table-wrap {
+  margin: var(--space-2) 0;
+  overflow-x: auto;
+}
+
+.niuu-chat-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-size: var(--text-xs);
+}
+
+.niuu-chat-md-table-head,
+.niuu-chat-md-table-cell {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.niuu-chat-md-table-head:last-child,
+.niuu-chat-md-table-cell:last-child {
+  border-right: none;
+}
+
+.niuu-chat-md-table thead {
+  background: var(--color-bg-tertiary);
+}
+
+.niuu-chat-md-table-head {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.niuu-chat-md-table-cell {
+  color: var(--color-text-secondary);
+}
+
+.niuu-chat-md-table tbody tr:last-child .niuu-chat-md-table-cell {
+  border-bottom: none;
+}
+
 .niuu-chat-md-cursor {
   display: inline-block;
   animation: niuu-chat-cursor-blink 1s step-start infinite;

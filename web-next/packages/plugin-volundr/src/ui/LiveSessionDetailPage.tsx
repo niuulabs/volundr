@@ -55,11 +55,6 @@ function isSessionBooting(status: string | null | undefined): boolean {
   return status === 'starting' || status === 'provisioning';
 }
 
-function formatTimestamp(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 function statusDotClass(status: string | null | undefined): string {
   switch (status) {
     case 'running':

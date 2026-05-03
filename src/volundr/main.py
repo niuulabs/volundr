@@ -60,6 +60,12 @@ from volundr.adapters.outbound.memory_secrets import InMemorySecretManager
 from volundr.adapters.outbound.pg_event_sink import PostgresEventSink
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
 from volundr.adapters.outbound.postgres_chronicles import PostgresChronicleRepository
+from volundr.adapters.outbound.postgres_communication_cursors import (
+    PostgresCommunicationCursorRepository,
+)
+from volundr.adapters.outbound.postgres_communication_routes import (
+    PostgresCommunicationRouteRepository,
+)
 from volundr.adapters.outbound.postgres_integrations import PostgresIntegrationRepository
 from volundr.adapters.outbound.postgres_mappings import PostgresMappingRepository
 from volundr.adapters.outbound.postgres_presets import PostgresPresetRepository
@@ -70,6 +76,7 @@ from volundr.adapters.outbound.postgres_timeline import PostgresTimelineReposito
 from volundr.adapters.outbound.postgres_tokens import PostgresTokenTracker
 from volundr.adapters.outbound.postgres_users import PostgresUserRepository
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
+from volundr.adapters.outbound.skuld_room import SkuldRoomAdapter
 from volundr.config import LoggingConfig, Settings
 from volundr.domain.ports import SessionContributor
 from volundr.domain.services import (
@@ -84,9 +91,11 @@ from volundr.domain.services import (
     TokenService,
     TrackerService,
 )
+from volundr.domain.services.communication_ingress import CommunicationIngressService
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.feature import FeatureService
 from volundr.domain.services.profile import ForgeProfileService
+from volundr.domain.services.telegram_ingress import TelegramIngressService
 from volundr.domain.services.template import WorkspaceTemplateService
 from volundr.domain.services.workspace import WorkspaceService
 from volundr.infrastructure.database import database_pool
@@ -642,6 +651,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Create adapters
             repository = PostgresSessionRepository(pool)
+            communication_route_repository = PostgresCommunicationRouteRepository(pool)
+            communication_cursor_repository = PostgresCommunicationCursorRepository(pool)
             stats_repository = PostgresStatsRepository(pool)
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
@@ -717,6 +728,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 integration_registry=integration_registry,
                 credential_store=credential_store,
             )
+            session_room_port = SkuldRoomAdapter(repository)
+            communication_ingress = CommunicationIngressService(
+                route_repository=communication_route_repository,
+                room_port=session_room_port,
+            )
+            telegram_ingress = TelegramIngressService(
+                integration_repo=integration_repo,
+                credential_store=credential_store,
+                communication_ingress=communication_ingress,
+                cursor_repository=communication_cursor_repository,
+            )
 
             # Create session contributors (dynamic adapter pattern)
             mount_strategies = SecretMountStrategyRegistry()
@@ -749,6 +771,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 provisioning_timeout=settings.provisioning.timeout_seconds,
                 provisioning_initial_delay=settings.provisioning.initial_delay_seconds,
                 integration_repo=integration_repo,
+                communication_route_repository=communication_route_repository,
+                session_communication_port=session_room_port,
             )
             stats_service = StatsService(stats_repository)
             token_service = TokenService(
@@ -1032,6 +1056,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(canonical_tracker_router)
 
             app.state.user_integration_service = user_integration_service
+            app.state.communication_route_repository = communication_route_repository
+            app.state.communication_cursor_repository = communication_cursor_repository
+            app.state.session_room_port = session_room_port
+            app.state.communication_ingress = communication_ingress
+            app.state.telegram_ingress = telegram_ingress
 
             # Event pipeline: sinks + ingestion service + REST endpoints
             pg_event_sink = PostgresEventSink(
@@ -1157,6 +1186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             background_task = asyncio.create_task(
                 _broadcast_periodic_updates(broadcaster, stats_service)
             )
+            await telegram_ingress.start()
 
             # Reconcile sessions stuck in PROVISIONING after a restart
             await session_service.reconcile_provisioning_sessions()
@@ -1164,6 +1194,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 yield
             finally:
+                await telegram_ingress.stop()
                 background_task.cancel()
                 try:
                     await background_task

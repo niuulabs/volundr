@@ -12,6 +12,7 @@ from skuld.channels import (
     TelegramChannel,
     WebSocketChannel,
     format_telegram_event,
+    render_telegram_html,
     split_message,
 )
 
@@ -218,6 +219,15 @@ class TestFormatTelegramEvent:
         event = {"type": "user_confirmed", "content": "Kick off the raid"}
         assert format_telegram_event(event) == "[prompt] Kick off the raid"
 
+    def test_user_confirmed_external_source_skipped(self):
+        event = {
+            "type": "user_confirmed",
+            "content": "Who is in this flock?",
+            "source": "telegram",
+            "metadata": {"source_platform": "telegram"},
+        }
+        assert format_telegram_event(event) is None
+
     def test_room_message_public(self):
         event = {
             "type": "room_message",
@@ -274,6 +284,25 @@ class TestFormatTelegramEvent:
         result = format_telegram_event(event)
         assert "[coder] delegate: review.completed" in result
         assert "Please verify the route parity checklist changes." in result
+
+    def test_render_telegram_html_formats_markdown_table(self):
+        rendered = render_telegram_html(
+            "[Skuld] | Peer | Status |\n"
+            "|------|--------|\n"
+            "| **Skuld** | idle |\n"
+            "| `coder` | blocked |"
+        )
+        assert rendered.startswith("<pre>")
+        assert "Peer" in rendered
+        assert "blocked" in rendered
+
+    def test_render_telegram_html_formats_bold_code_and_links(self):
+        rendered = render_telegram_html(
+            "[Skuld] **blocked** on `README.md`; see [docs](https://example.com)"
+        )
+        assert "<b>blocked</b>" in rendered
+        assert "<code>README.md</code>" in rendered
+        assert '<a href="https://example.com">docs</a>' in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +421,42 @@ class TestTelegramChannelMocked:
             text="Hello",
             message_thread_id=77,
         )
+
+    @pytest.mark.asyncio
+    async def test_send_event_room_message_uses_html_parse_mode(self, channel):
+        event = {
+            "type": "room_message",
+            "participant": {"persona": "Skuld", "display_name": "Skuld"},
+            "content": "**Blocked** on `README.md`; see [docs](https://example.com)",
+            "visibility": "public",
+        }
+        await channel.send_event(event)
+        _, kwargs = channel._bot.send_message.call_args
+        assert kwargs["chat_id"] == "12345"
+        assert kwargs["parse_mode"] == "HTML"
+        assert "<b>Blocked</b>" in kwargs["text"]
+        assert "<code>README.md</code>" in kwargs["text"]
+        assert '<a href="https://example.com">docs</a>' in kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_send_event_room_message_table_uses_preformatted_block(self, channel):
+        event = {
+            "type": "room_message",
+            "participant": {"persona": "Skuld", "display_name": "Skuld"},
+            "content": (
+                "| Peer | Status |\n"
+                "|------|--------|\n"
+                "| **Skuld** | idle |\n"
+                "| `coder` | blocked |"
+            ),
+            "visibility": "public",
+        }
+        await channel.send_event(event)
+        _, kwargs = channel._bot.send_message.call_args
+        assert kwargs["parse_mode"] == "HTML"
+        assert "<pre>" in kwargs["text"]
+        assert "Peer" in kwargs["text"]
+        assert "blocked" in kwargs["text"]
 
     @pytest.mark.asyncio
     async def test_send_event_skips_none_format(self, channel):

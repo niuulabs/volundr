@@ -94,6 +94,32 @@ describe('useSkuldChat', () => {
     expect(result.current.messages[0]?.content).toBe('Kick off the raid.');
   });
 
+  it('renders live user_confirmed events without requiring a refresh', async () => {
+    const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
+
+    await waitFor(() => expect(result.current.historyLoaded).toBe(true));
+
+    act(() => {
+      wsHandlers.onMessage?.(
+        JSON.stringify({
+          type: 'user_confirmed',
+          id: 'telegram-turn-1',
+          content: 'Can you tell me the participants in this chat',
+          created_at: '2026-05-03T13:24:30.988625+00:00',
+          metadata: { source_platform: 'telegram' },
+        }),
+      );
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.id).toBe('telegram-turn-1');
+    expect(result.current.messages[0]?.role).toBe('user');
+    expect(result.current.messages[0]?.content).toBe(
+      'Can you tell me the participants in this chat',
+    );
+    expect(result.current.messages[0]?.metadata).toEqual({ source_platform: 'telegram' });
+  });
+
   it('ignores unsuccessful room_outcome events', async () => {
     const { result } = renderHook(() => useSkuldChat('ws://localhost:8080/s/test/session'));
 

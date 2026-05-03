@@ -124,4 +124,21 @@ describe('MarkdownContent', () => {
     render(<MarkdownContent content={'> This is a quote'} />);
     expect(screen.getByRole('blockquote')).toBeInTheDocument();
   });
+
+  it('renders markdown table content', () => {
+    render(
+      <MarkdownContent
+        content={
+          '| Peer | Status |\n|------|--------|\n| **Skuld** | idle |\n| `coder` | blocked |'
+        }
+      />,
+    );
+
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Peer' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+    expect(screen.getByText('Skuld').tagName).toBe('STRONG');
+    expect(screen.getByText('coder').tagName).toBe('CODE');
+    expect(screen.getByText('blocked')).toBeInTheDocument();
+  });
 });

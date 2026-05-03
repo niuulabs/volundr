@@ -17,6 +17,8 @@ import type { FileAttachment } from '@niuulabs/ui';
 import { useWebSocket } from './useWebSocket';
 import { wsUrlToHttpBase } from '../liveSessionTransport';
 
+const HISTORY_RETRY_DELAY_MS = 1000;
+
 type WireParticipant = {
   peer_id?: string;
   peerId?: string;
@@ -42,6 +44,7 @@ type WireParticipant = {
 type CliStreamEvent = {
   type: string;
   subtype?: string;
+  id?: string;
   content?: string | Array<{ type: string; text?: string }>;
   result?: string;
   error?: string | { message?: string };
@@ -72,6 +75,7 @@ type CliStreamEvent = {
   created_at?: string;
   thread_id?: string;
   visibility?: 'visible' | 'internal';
+  metadata?: Record<string, unknown>;
   eventType?: string;
   verdict?: string;
   summary?: string;
@@ -91,6 +95,7 @@ type CliStreamEvent = {
   };
   turns?: ConversationTurn[];
   fields?: Record<string, unknown>;
+  valid?: boolean;
 };
 
 interface ConversationTurn {
@@ -433,6 +438,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
   const streamingModelRef = useRef('');
   const streamingInputTokensRef = useRef<number | undefined>(undefined);
   const streamingOutputTokensRef = useRef<number | undefined>(undefined);
+  const historyRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     participantsRef.current = participants;
@@ -470,6 +476,13 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     toolIdRef.current = '';
     streamingInputTokensRef.current = undefined;
     streamingOutputTokensRef.current = undefined;
+  }, []);
+
+  const clearHistoryRetryTimer = useCallback(() => {
+    if (historyRetryTimerRef.current !== null) {
+      clearTimeout(historyRetryTimerRef.current);
+      historyRetryTimerRef.current = null;
+    }
   }, []);
 
   const finalizeStreaming = useCallback(
@@ -533,6 +546,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
 
   useEffect(() => {
     if (!url) return;
+    clearHistoryRetryTimer();
     const cached = safeSessionStorageGet(url);
     if (!cached) return;
     if ((cached.messages?.length ?? 0) > 0) {
@@ -549,7 +563,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     if (cached.agentEvents) {
       setAgentEvents(reviveAgentEvents(cached.agentEvents));
     }
-  }, [url]);
+  }, [clearHistoryRetryTimer, url]);
 
   useEffect(() => {
     if (!url || historyLoaded) return;
@@ -569,9 +583,15 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
     const historyUrl = new URL('api/conversation/history', base);
 
     fetch(historyUrl.href, { headers })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`history_fetch_failed:${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         if (cancelled) return;
+        clearHistoryRetryTimer();
         const nextMessages = data.turns?.length ? transformTurns(data.turns) : [];
         if (
           nextMessages.some((message) => message.role === 'assistant') &&
@@ -591,13 +611,19 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
       })
       .catch(() => {
         if (cancelled) return;
-        setHistoryLoadedForUrl(url);
+        clearHistoryRetryTimer();
+        historyRetryTimerRef.current = setTimeout(() => {
+          if (!cancelled) {
+            setHistoryLoadedForUrl((current) => (current === url ? null : current));
+          }
+        }, HISTORY_RETRY_DELAY_MS);
       });
 
     return () => {
       cancelled = true;
+      clearHistoryRetryTimer();
     };
-  }, [ensureSingleParticipant, historyLoaded, url]);
+  }, [clearHistoryRetryTimer, ensureSingleParticipant, historyLoaded, url]);
 
   useEffect(() => {
     if (!url) return;
@@ -875,6 +901,37 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             }
             break;
           }
+          case 'user_confirmed': {
+            const messageId =
+              typeof event.id === 'string' && event.id
+                ? event.id
+                : typeof event.request_id === 'string' && event.request_id
+                  ? event.request_id
+                : generateId();
+            const content = typeof event.content === 'string' ? event.content : '';
+            if (!content) break;
+            setMessages((prev) => {
+              if (prev.some((message) => message.id === messageId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: messageId,
+                  role: 'user',
+                  content,
+                  createdAt: event.created_at ? new Date(event.created_at) : new Date(),
+                  status: 'done',
+                  metadata:
+                    event.metadata && typeof event.metadata === 'object'
+                      ? (event.metadata as ChatMessage['metadata'])
+                      : undefined,
+                  visibility: event.visibility,
+                },
+              ];
+            });
+            break;
+          }
           case 'control_request': {
             if (!event.request_id) break;
             setPendingPermissions((prev) => [
@@ -1064,7 +1121,10 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
             const appendStreamingTextPart = (type: 'reasoning' | 'text', text: string) => {
               const lastPart = stream.parts.at(-1);
               if (lastPart?.type === type) {
-                lastPart.text = `${lastPart.text ?? ''}${text}`;
+                stream.parts = [
+                  ...stream.parts.slice(0, -1),
+                  { ...lastPart, text: `${lastPart.text ?? ''}${text}` },
+                ];
                 return;
               }
               stream.parts.push({ type, text });

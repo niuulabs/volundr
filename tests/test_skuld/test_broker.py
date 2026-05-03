@@ -1,6 +1,7 @@
 """Tests for Skuld broker service."""
 
 import asyncio
+import json
 import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -824,7 +825,10 @@ class TestFastAPIEndpoints:
                 encoding="utf-8",
             )
             (tmp_path / ".flock" / "logs" / "coder.log").write_text(
-                "2026-05-01 15:19:58,326 ravn.drive_loop ERROR drive_loop: task failed after 3 retries\n",
+                (
+                    "2026-05-01 15:19:58,326 ravn.drive_loop ERROR "
+                    "drive_loop: task failed after 3 retries\n"
+                ),
                 encoding="utf-8",
             )
 
@@ -2708,6 +2712,169 @@ class TestBrokerRoomBridge:
         mock_ws.send_json.assert_awaited_once()
         sent = mock_ws.send_json.call_args[0][0]
         assert sent["type"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_handle_human_room_message_records_and_broadcasts(self, room_settings):
+        b = Broker(settings=room_settings)
+        transport = AsyncMock()
+        transport.is_alive = False
+        b._transport = transport
+        assert b._room_bridge is not None
+        await b._room_bridge.register("peer-1", "coder", AsyncMock(), display_name="Coder")
+        broadcast = AsyncMock()
+        b._channels = MagicMock()
+        b._channels.broadcast = broadcast
+
+        message_id = await b.handle_human_room_message("Hello from Telegram", source="telegram")
+
+        assert message_id
+        assert b._conversation_turns[-1].role == "user"
+        assert b._conversation_turns[-1].content == "Hello from Telegram"
+        broadcast.assert_awaited_once()
+        sent = broadcast.await_args.args[0]
+        assert sent["type"] == "user_confirmed"
+        assert sent["content"] == "Hello from Telegram"
+        assert sent["source"] == "telegram"
+        transport.start.assert_awaited_once()
+        transport.send_message.assert_awaited_once()
+        outbound = transport.send_message.await_args.args[0]
+        assert "Hello from Telegram" in outbound
+        assert "You are Skuld, the observer/coordinator for an active flock session." in outbound
+        assert "Coder (peer_id=peer-1, type=ravn" in outbound
+
+    @pytest.mark.asyncio
+    async def test_handle_directed_room_message_routes_to_target(self, room_settings):
+        b = Broker(settings=room_settings)
+        transport = AsyncMock()
+        transport.is_alive = False
+        b._transport = transport
+        assert b._room_bridge is not None
+        register_ws = AsyncMock()
+        await b._room_bridge.register("peer-1", "coder", register_ws, display_name="Coder")
+        broadcast = AsyncMock()
+        b._channels = MagicMock()
+        b._channels.broadcast = broadcast
+
+        message_id = await b.handle_directed_room_message(
+            "peer-1",
+            "Please investigate this",
+            source="telegram",
+        )
+
+        assert message_id
+        assert b._conversation_turns[-1].content == "@coder Please investigate this"
+        register_ws.send_text.assert_awaited_once()
+        payload = json.loads(register_ws.send_text.await_args.args[0])
+        assert payload["type"] == "directed_message"
+        assert payload["content"] == "Please investigate this"
+        transport.start.assert_not_awaited()
+        transport.send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_transport_user_echo_does_not_duplicate_explicit_human_room_message(
+        self, room_settings
+    ):
+        b = Broker(settings=room_settings)
+        transport = AsyncMock()
+        transport.is_alive = True
+        b._transport = transport
+        b._channels = MagicMock()
+        b._channels.broadcast = AsyncMock()
+
+        await b.handle_human_room_message("Hello from Telegram", source="telegram")
+        assert len(b._conversation_turns) == 1
+
+        await b._handle_cli_event({"type": "user", "message": {"content": "Hello from Telegram"}})
+
+        assert len(b._conversation_turns) == 1
+
+    @pytest.mark.asyncio
+    async def test_explicit_human_room_response_is_room_only(self, room_settings):
+        b = Broker(settings=room_settings)
+        transport = AsyncMock()
+        transport.is_alive = True
+        b._transport = transport
+        b._channels = MagicMock()
+        b._channels.broadcast = AsyncMock()
+        b._mesh_adapter = MagicMock()
+        b._mesh_adapter.peer_id = "skuld-room"
+        assert b._room_bridge is not None
+        await b._room_bridge.register_mesh_peer(
+            "skuld-room",
+            "Skuld",
+            display_name="Skuld",
+            participant_type="skuld",
+        )
+
+        publish_mesh = AsyncMock()
+        b._on_result_publish_mesh = publish_mesh
+
+        await b.handle_human_room_message("Who is in this flock?", source="telegram")
+        assert len(b._conversation_turns) == 1
+
+        await b._handle_cli_event(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Skuld sees coder, reviewer, and verifier.",
+                        }
+                    ]
+                },
+            }
+        )
+        await b._handle_cli_event(
+            {
+                "type": "result",
+                "result": "Skuld sees coder, reviewer, and verifier.",
+                "modelUsage": {},
+            }
+        )
+
+        assert b._channels.broadcast.await_count == 1
+        assert publish_mesh.await_count == 0
+        assert len(b._conversation_turns) == 2
+        assert b._conversation_turns[-1].content == "Skuld sees coder, reviewer, and verifier."
+        assert b._conversation_turns[-1].participant_id == "skuld-room"
+
+    @pytest.mark.asyncio
+    async def test_get_room_participants_returns_snapshot(self, room_settings):
+        b = Broker(settings=room_settings)
+        assert b._room_bridge is not None
+        await b._room_bridge.register("peer-1", "coder", AsyncMock(), display_name="Coder")
+
+        participants = b.get_room_participants()
+
+        assert participants
+        assert participants[0]["peer_id"] == "peer-1"
+        assert participants[0]["persona"] == "coder"
+
+    def test_get_communication_routes_returns_channel_routes(self, room_settings):
+        b = Broker(settings=room_settings)
+        mock_channel = MagicMock()
+        mock_channel.channel_type = "telegram"
+        mock_channel.communication_route.return_value = {
+            "platform": "telegram",
+            "conversation_id": "chat-1",
+            "thread_id": "5",
+            "mode": "room",
+            "metadata": {"topic_mode": "topic_per_session"},
+        }
+        b._channels.add(mock_channel)
+
+        routes = b.get_communication_routes()
+
+        assert routes == [
+            {
+                "platform": "telegram",
+                "conversation_id": "chat-1",
+                "thread_id": "5",
+                "mode": "room",
+                "metadata": {"topic_mode": "topic_per_session"},
+            }
+        ]
 
     # -----------------------------------------------------------------------
     # room_state on browser connect

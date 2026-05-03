@@ -140,6 +140,11 @@ class VolundrHTTPAdapter(VolundrPort):
                 headers=self._headers(auth_token),
             )
             resp.raise_for_status()
+            if not resp.content:
+                raise ValueError(
+                    f"Volundr returned empty response (status={resp.status_code}, "
+                    f"url={resp.url})"
+                )
             return [
                 VolundrSession(
                     id=s["id"],

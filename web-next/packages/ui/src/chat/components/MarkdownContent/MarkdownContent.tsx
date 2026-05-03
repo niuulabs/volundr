@@ -172,6 +172,48 @@ function TextSegment({ content, isStreaming }: { content: string; isStreaming?: 
       continue;
     }
 
+    // Markdown table
+    const headerCells = parseTableRow(line);
+    const dividerLine = lines[i + 1];
+    if (headerCells && dividerLine && isTableDivider(dividerLine)) {
+      const rows: string[][] = [];
+      let rowIndex = i + 2;
+      while (rowIndex < lines.length) {
+        const rowCells = parseTableRow(lines[rowIndex] ?? '');
+        if (!rowCells || isTableDivider(lines[rowIndex] ?? '')) break;
+        rows.push(rowCells);
+        rowIndex += 1;
+      }
+      elements.push(
+        <div key={`table-${i}`} className="niuu-chat-md-table-wrap">
+          <table className="niuu-chat-md-table">
+            <thead>
+              <tr>
+                {headerCells.map((cell, idx) => (
+                  <th key={idx} className="niuu-chat-md-table-head">
+                    {renderInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIdx) => (
+                <tr key={rowIdx}>
+                  {row.map((cell, cellIdx) => (
+                    <td key={cellIdx} className="niuu-chat-md-table-cell">
+                      {renderInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      i = rowIndex;
+      continue;
+    }
+
     // Unordered list item
     const unorderedItem = parseUnorderedListItem(line);
     if (unorderedItem !== null) {
@@ -334,6 +376,22 @@ function parseOrderedListItem(line: string): string | null {
   if (index === 0) return null;
   if (line[index] !== '.' || line[index + 1] !== ' ') return null;
   return line.slice(index + 2);
+}
+
+function parseTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return null;
+  const withoutLeading = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed;
+  const normalized = withoutLeading.endsWith('|') ? withoutLeading.slice(0, -1) : withoutLeading;
+  const cells = normalized.split('|').map((cell) => cell.trim());
+  if (cells.length < 2 || cells.some((cell) => cell.length === 0)) return null;
+  return cells;
+}
+
+function isTableDivider(line: string): boolean {
+  const cells = parseTableRow(line);
+  if (!cells) return false;
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
 
 function isDigit(char: string): boolean {

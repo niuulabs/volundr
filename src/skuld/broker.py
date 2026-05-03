@@ -26,7 +26,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from niuu.domain.logging import LoggingConfig
 from niuu.domain.outcome import parse_outcome_block
@@ -487,6 +487,8 @@ class Broker:
         self._pending_assistant_parts: list[dict] = []
         self._pending_block_type: str = ""
         self._pending_reasoning_text: str = ""
+        self._pending_explicit_human_messages: list[tuple[str, str]] = []
+        self._pending_explicit_human_response_count = 0
         self._chronicle_watcher: ChronicleWatcher | None = None
         self._peer_watchdog_task: asyncio.Task[None] | None = None
         self._peer_watches: dict[str, PeerWatchState] = {}
@@ -1083,11 +1085,16 @@ class Broker:
     async def _handle_cli_event(self, data: dict) -> None:
         """Forward a CLI event to all connected channels."""
         event_type = data.get("type", "unknown")
+        suppress_channel_broadcast = (
+            event_type in {"user", "assistant", "content_block_delta", "result"}
+            and self._pending_explicit_human_response_count > 0
+        )
         num_channels = self._channels.count
         logger.debug(
-            "_handle_cli_event: type=%s, forwarding to %d channel(s)",
+            "_handle_cli_event: type=%s, forwarding to %d channel(s) suppress=%s",
             event_type,
             num_channels,
+            suppress_channel_broadcast,
         )
 
         if num_channels == 0:
@@ -1096,7 +1103,8 @@ class Broker:
                 event_type,
             )
 
-        await self._channels.broadcast(data)
+        if not suppress_channel_broadcast:
+            await self._channels.broadcast(data)
 
         # Record user messages that arrive via the transport (e.g. the
         # initial prompt flushed as a pending message) into conversation
@@ -1111,13 +1119,19 @@ class Broker:
             if isinstance(msg, dict):
                 user_content = msg.get("content", "")
             if isinstance(user_content, str) and user_content:
-                self._append_turn(
-                    ConversationTurn(
-                        id=str(uuid.uuid4()),
-                        role="user",
-                        content=user_content,
+                if self._pending_explicit_human_messages:
+                    raw_pending, outbound_pending = self._pending_explicit_human_messages[0]
+                    if user_content in {raw_pending, outbound_pending}:
+                        self._pending_explicit_human_messages.pop(0)
+                        user_content = ""
+                if user_content:
+                    self._append_turn(
+                        ConversationTurn(
+                            id=str(uuid.uuid4()),
+                            role="user",
+                            content=user_content,
+                        )
                     )
-                )
 
         # When CLI sends system/init, broadcast available commands to browsers
         if event_type == "system" and data.get("subtype") == "init":
@@ -1142,7 +1156,8 @@ class Broker:
                 )
         elif event_type == "result":
             asyncio.create_task(self._report_activity_state("idle"))
-            asyncio.create_task(self._on_result_publish_mesh())
+            if self._pending_explicit_human_response_count == 0:
+                asyncio.create_task(self._on_result_publish_mesh())
 
         # Track conversation from assistant messages.
         # The SDK WebSocket protocol sends complete messages as type=assistant
@@ -1231,6 +1246,7 @@ class Broker:
         if event_type == "result":
             self._artifacts.record_result()
             asyncio.create_task(self._report_usage(data))
+            explicit_room_reply = self._pending_explicit_human_response_count > 0
 
             # Flush pending assistant turn (HTTP streaming format sends result)
             if not self._pending_assistant_content:
@@ -1252,18 +1268,25 @@ class Broker:
 
             # Capture content before flush clears it
             content = self._pending_assistant_content or data.get("result", "")
-            self._flush_pending_assistant_turn(
-                metadata={
-                    "usage": model_usage_for_turn,
-                    "cost": result_cost,
-                    "model": result_model,
-                }
-            )
+            if explicit_room_reply:
+                self._pending_assistant_content = ""
+                self._pending_assistant_parts = []
+                self._pending_reasoning_text = ""
+            else:
+                self._flush_pending_assistant_turn(
+                    metadata={
+                        "usage": model_usage_for_turn,
+                        "cost": result_cost,
+                        "model": result_model,
+                    }
+                )
 
             # Emit CLI turn as room_message so it shows participant color
             if self._room_bridge is not None and self._mesh_adapter is not None and content:
                 await self._room_bridge.broadcast_cli_message(self._mesh_adapter.peer_id, content)
                 await self._room_bridge.broadcast_cli_activity(self._mesh_adapter.peer_id, "idle")
+            if explicit_room_reply and self._pending_explicit_human_response_count > 0:
+                self._pending_explicit_human_response_count -= 1
 
             first_line = ""
             if content:
@@ -1483,6 +1506,138 @@ class Broker:
                 )
 
                 await self._transport.send_message(message)
+
+    async def handle_human_room_message(
+        self,
+        content: str,
+        *,
+        source: str = "external",
+        metadata: dict[str, Any] | None = None,
+        deliver_to_transport: bool = True,
+    ) -> str:
+        """Record and broadcast a human-originated room message."""
+        if not content.strip():
+            raise ValueError("content is required")
+
+        msg_id = str(uuid.uuid4())
+        self._append_turn(
+            ConversationTurn(
+                id=msg_id,
+                role="user",
+                content=content,
+            )
+        )
+        await self._channels.broadcast(
+            {
+                "type": "user_confirmed",
+                "id": msg_id,
+                "content": content,
+                "source": source,
+                "metadata": metadata or {},
+            }
+        )
+        if deliver_to_transport:
+            await self._send_explicit_human_message_to_transport(content)
+        return msg_id
+
+    async def handle_directed_room_message(
+        self,
+        target_peer_id: str,
+        content: str,
+        *,
+        source: str = "external",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Record and route a directed human message to a room participant."""
+        if self._room_bridge is None:
+            raise RuntimeError("Room mode is not enabled")
+        if not target_peer_id.strip():
+            raise ValueError("target_peer_id is required")
+        if not content.strip():
+            raise ValueError("content is required")
+
+        participant = self._room_bridge.participants.get(target_peer_id)
+        display_target = participant.persona if participant else target_peer_id
+        rendered_content = f"@{display_target} {content}"
+        msg_id = await self.handle_human_room_message(
+            rendered_content,
+            source=source,
+            metadata=metadata,
+            deliver_to_transport=False,
+        )
+
+        delivered = await self._room_bridge.route_directed_message(target_peer_id, content)
+        if not delivered:
+            raise LookupError(f"Unknown room participant: {target_peer_id}")
+        return msg_id
+
+    async def _send_explicit_human_message_to_transport(self, content: str) -> None:
+        """Deliver an explicit human room message to Skuld's own transport."""
+        if self._transport is None:
+            logger.warning("No transport available for explicit human room message")
+            return
+        outbound = self._format_room_message_for_skuld(content)
+        self._pending_explicit_human_messages.append((content, outbound))
+        self._pending_explicit_human_response_count += 1
+        if not self._transport.is_alive:
+            logger.info("Starting transport for explicit human room message")
+            await self._transport.start()
+        await self._transport.send_message(outbound)
+
+    def _format_room_message_for_skuld(self, content: str) -> str:
+        """Wrap an explicit human room message with flock context for Skuld."""
+        if self._room_bridge is None:
+            return content
+
+        participants = sorted(
+            self._room_bridge.participants.values(),
+            key=lambda participant: (
+                0 if participant.participant_type == "skuld" else 1,
+                participant.persona.lower(),
+            ),
+        )
+        lines = [
+            "You are Skuld, the observer/coordinator for an active flock session.",
+            (
+                "Answer as the session observer using the live flock context below, "
+                "not as a generic standalone chat."
+            ),
+            "",
+            "Current room participants:",
+        ]
+        for participant in participants:
+            display = participant.display_name or participant.persona or participant.peer_id
+            status = participant.status or "idle"
+            lines.append(
+                f"- {display} (peer_id={participant.peer_id}, "
+                f"type={participant.participant_type}, status={status})"
+            )
+        lines.extend(
+            [
+                "",
+                "Human message from an external communication interface:",
+                content,
+            ]
+        )
+        return "\n".join(lines)
+
+    def get_room_participants(self) -> list[dict[str, Any]]:
+        """Return the current room participants as plain dictionaries."""
+        if self._room_bridge is None:
+            return []
+        return [asdict(participant) for participant in self._room_bridge.participants.values()]
+
+    def get_communication_routes(self) -> list[dict[str, Any]]:
+        """Return active external communication routes exposed by this broker."""
+        routes: list[dict[str, Any]] = []
+        for channel in self._channels.channels:
+            route_getter = getattr(channel, "communication_route", None)
+            if not callable(route_getter):
+                continue
+            route = route_getter()
+            if isinstance(route, dict):
+                routes.append(route)
+        return routes
 
     def _build_auth_headers(self) -> dict[str, str]:
         """Build authentication headers for Volundr API calls.
@@ -2949,6 +3104,23 @@ class _SendMessageRequest(BaseModel):
     content: str
 
 
+class _RoomMessageRequest(BaseModel):
+    """Request body for a human message entering a room session."""
+
+    content: str
+    source: str = "external"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class _DirectedRoomMessageRequest(BaseModel):
+    """Request body for a directed human message entering a room session."""
+
+    target_peer_id: str
+    content: str
+    source: str = "external"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 @app.post("/api/message")
 async def send_message_to_session(body: _SendMessageRequest) -> dict:
     """Send a message to another session via Volundr's WS proxy.
@@ -2970,6 +3142,53 @@ async def send_message_to_session(body: _SendMessageRequest) -> dict:
         raise HTTPException(502, f"Failed to reach Volundr: {e}")
 
     return {"status": "sent", "target_session_id": body.session_id}
+
+
+@app.post("/api/room/message")
+async def send_room_message(body: _RoomMessageRequest) -> dict:
+    """Inject a human-originated message into the active room session."""
+    try:
+        message_id = await broker.handle_human_room_message(
+            body.content,
+            source=body.source,
+            metadata=body.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    return {"status": "sent", "message_id": message_id}
+
+
+@app.post("/api/room/direct")
+async def send_directed_room_message(body: _DirectedRoomMessageRequest) -> dict:
+    """Inject a human-originated directed room message."""
+    try:
+        message_id = await broker.handle_directed_room_message(
+            body.target_peer_id,
+            body.content,
+            source=body.source,
+            metadata=body.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+
+    return {"status": "sent", "message_id": message_id}
+
+
+@app.get("/api/room/participants")
+async def get_room_participants() -> dict:
+    """Return the current participants in the active room session."""
+    return {"participants": broker.get_room_participants()}
+
+
+@app.get("/api/communication/routes")
+async def get_communication_routes() -> dict:
+    """Return active external communication routes for the live session."""
+    return {"routes": broker.get_communication_routes()}
 
 
 class _TokenRedactFilter(logging.Filter):
