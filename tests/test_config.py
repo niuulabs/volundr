@@ -18,6 +18,23 @@ from volundr.config import (
     _default_feature_modules,
 )
 
+_VOLUNDR_SETTINGS_ENV_VARS = (
+    "NIUU_CONFIG",
+    "DATABASE__HOST",
+    "DATABASE__PORT",
+    "POD_MANAGER__ADAPTER",
+    "POD_MANAGER__KWARGS__WORKSPACES_DIR",
+    "POD_MANAGER__KWARGS__CLAUDE_BINARY",
+    "POD_MANAGER__KWARGS__MAX_CONCURRENT",
+    "POD_MANAGER__KWARGS__SDK_PORT_START",
+)
+
+
+def _clear_settings_env(monkeypatch) -> None:
+    """Remove env vars that can leak between config tests in the full suite."""
+    for name in _VOLUNDR_SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
 
 class TestDatabaseConfig:
     """Tests for DatabaseConfig."""
@@ -617,10 +634,7 @@ pod_manager:
 
         # Change working directory so ./config.yaml resolves to our temp file
         monkeypatch.chdir(tmp_path)
-        # Clear env vars that could leak from embedded PG or NIUU_CONFIG
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
-        monkeypatch.delenv("DATABASE__HOST", raising=False)
-        monkeypatch.delenv("DATABASE__PORT", raising=False)
+        _clear_settings_env(monkeypatch)
 
         settings = Settings()
 
@@ -642,9 +656,7 @@ database:
         config_file.write_text(yaml_content)
 
         monkeypatch.chdir(tmp_path)
-        # Clear env vars that could leak from embedded PG
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
-        monkeypatch.delenv("DATABASE__PORT", raising=False)
+        _clear_settings_env(monkeypatch)
         # Use nested delimiter (DATABASE__HOST) to override nested config
         monkeypatch.setenv("DATABASE__HOST", "env-host")
 
@@ -675,6 +687,7 @@ git:
         config_file.write_text(yaml_content)
 
         monkeypatch.chdir(tmp_path)
+        _clear_settings_env(monkeypatch)
 
         settings = Settings()
 
@@ -693,7 +706,7 @@ git:
         """Settings uses defaults when no YAML file exists."""
         # Change to a directory without config.yaml
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
+        _clear_settings_env(monkeypatch)
 
         settings = Settings()
 
@@ -713,12 +726,13 @@ pod_manager:
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
+        _clear_settings_env(monkeypatch)
         monkeypatch.setenv("NIUU_CONFIG", str(config_file))
         configured = Settings()
         assert configured.pod_manager.kwargs == {"namespace": "dynamic-test"}
 
         monkeypatch.chdir(empty_dir)
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
+        _clear_settings_env(monkeypatch)
         defaults = Settings()
         assert defaults.pod_manager.kwargs == {}
 
@@ -756,7 +770,7 @@ integrations:
         config_file.write_text(yaml_content)
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("NIUU_CONFIG", raising=False)
+        _clear_settings_env(monkeypatch)
 
         settings = Settings()
 
@@ -846,6 +860,7 @@ features:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml_content)
         monkeypatch.chdir(tmp_path)
+        _clear_settings_env(monkeypatch)
 
         settings = Settings()
         assert len(settings.features) == 1
