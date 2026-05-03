@@ -469,9 +469,7 @@ function normalizeLogs(sessionId: string, payload: LogPayload): VolundrLog[] {
   });
 }
 
-function normalizeAggregateParticipants(
-  payload: AggregatedLogPayload,
-): VolundrLogParticipant[] {
+function normalizeAggregateParticipants(payload: AggregatedLogPayload): VolundrLogParticipant[] {
   return (payload.available_participants ?? []).map((participant) => ({
     id: participant.id,
     label: participant.label ?? participant.id,

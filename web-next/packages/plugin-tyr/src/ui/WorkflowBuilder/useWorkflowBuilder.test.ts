@@ -283,7 +283,10 @@ describe('useWorkflowBuilder — startConnect / cancelConnect / completeConnect'
     act(() => result.current.startConnect('stage-1', 'qa.report'));
     act(() => result.current.completeConnect('gate-1'));
     const newEdge = result.current.workflow.edges.find(
-      (e) => e.source === 'stage-1' && e.target === 'gate-1' && e.label === 'qa.report -> approval.requested',
+      (e) =>
+        e.source === 'stage-1' &&
+        e.target === 'gate-1' &&
+        e.label === 'qa.report -> approval.requested',
     );
     expect(newEdge).toBeDefined();
   });
@@ -492,8 +495,6 @@ describe('useWorkflowBuilder — updateNodeLabel', () => {
     };
     const { result } = renderHook(() => useWorkflowBuilder(triggerWorkflow));
     act(() => result.current.updateNode('trigger-1', { dispatchEvent: 'review.requested' }));
-    expect(result.current.workflow.edges[0]?.label).toBe(
-      'review.requested -> review.requested',
-    );
+    expect(result.current.workflow.edges[0]?.label).toBe('review.requested -> review.requested');
   });
 });

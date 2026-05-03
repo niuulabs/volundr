@@ -1,6 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { deriveHttpBase, listSessions, SessionTerminalLive, spawnSession } from './SessionTerminalLive';
+import {
+  deriveHttpBase,
+  listSessions,
+  SessionTerminalLive,
+  spawnSession,
+} from './SessionTerminalLive';
 
 vi.mock('@niuulabs/query', () => ({
   getAccessToken: vi.fn(() => 'token-123'),
@@ -27,10 +32,17 @@ describe('SessionTerminalLive helpers', () => {
       .mockResolvedValueOnce(new Response(null, { status: 404 }))
       .mockResolvedValueOnce(new Response(null, { status: 500 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ sessions: [{ terminalId: 'term-1', label: 'Main', cli_type: 'shell', status: 'running' }] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            sessions: [
+              { terminalId: 'term-1', label: 'Main', cli_type: 'shell', status: 'running' },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
       );
 
     await expect(listSessions('https://example.com')).resolves.toBeNull();

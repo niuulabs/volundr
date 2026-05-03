@@ -41,7 +41,9 @@ export function createMockRepoCatalogService(): RepoCatalogService {
     getBranches: async (repoUrl: string) => {
       const repo = MOCK_REPOS.find(
         (item) =>
-          item.cloneUrl === repoUrl || item.url === repoUrl || `${item.org}/${item.name}` === repoUrl,
+          item.cloneUrl === repoUrl ||
+          item.url === repoUrl ||
+          `${item.org}/${item.name}` === repoUrl,
       );
       return repo?.branches ?? ['main'];
     },

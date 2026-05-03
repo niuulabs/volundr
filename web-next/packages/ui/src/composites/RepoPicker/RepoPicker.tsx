@@ -31,9 +31,7 @@ function repoValue(repo: RepoRecord, valueMode: 'cloneUrl' | 'slug'): string {
 }
 
 export function findRepoByRef(repos: RepoRecord[], ref: string): RepoRecord | undefined {
-  return repos.find(
-    (repo) => repo.cloneUrl === ref || repo.url === ref || repoSlug(repo) === ref,
-  );
+  return repos.find((repo) => repo.cloneUrl === ref || repo.url === ref || repoSlug(repo) === ref);
 }
 
 export function groupReposByProvider(
@@ -56,11 +54,12 @@ export function groupReposByProvider(
   return Object.entries(groups).map(([label, options]) => ({ label, options }));
 }
 
-export function getCommonBranches(
-  repos: RepoRecord[],
-  selectedRepos: string[] | string,
-): string[] {
-  const repoIds = Array.isArray(selectedRepos) ? selectedRepos : selectedRepos ? [selectedRepos] : [];
+export function getCommonBranches(repos: RepoRecord[], selectedRepos: string[] | string): string[] {
+  const repoIds = Array.isArray(selectedRepos)
+    ? selectedRepos
+    : selectedRepos
+      ? [selectedRepos]
+      : [];
   if (repoIds.length === 0) return [];
 
   const resolved = repoIds

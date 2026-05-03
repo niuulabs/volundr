@@ -39,9 +39,7 @@ describe('WorkflowCard', () => {
 
   it('renders the workflow description text', () => {
     render(<WorkflowCard workflow="ship" />);
-    expect(
-      screen.getByText(/saved as the saga default/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/saved as the saga default/i)).toBeInTheDocument();
   });
 
   it('renders the dispatch override info row', () => {

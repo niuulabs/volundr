@@ -47,9 +47,6 @@ def _config_paths() -> list[Path]:
     ]
 
 
-CONFIG_PATHS = _config_paths()
-
-
 class LocalGitConfig(BaseModel):
     """Configuration for local git workspace operations."""
 
@@ -1206,7 +1203,6 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_nested_delimiter="__",
         extra="ignore",
@@ -1244,6 +1240,7 @@ class Settings(BaseSettings):
         default="skuldClaude",
         description="Fallback definition key when no explicit definition is specified.",
     )
+
     models: list[AIModelConfig] = Field(default_factory=_default_models)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
@@ -1274,6 +1271,6 @@ class Settings(BaseSettings):
         return (
             init_settings,
             env_settings,
-            YamlConfigSettingsSource(settings_cls),
+            YamlConfigSettingsSource(settings_cls, yaml_file=_config_paths()),
             file_secret_settings,
         )

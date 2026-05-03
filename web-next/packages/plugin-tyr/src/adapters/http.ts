@@ -680,9 +680,7 @@ export function buildDispatchBusHttpAdapter(client: ApiClient): IDispatchBus {
         ...(options.model ? { model: options.model } : {}),
         ...(options.systemPrompt ? { system_prompt: options.systemPrompt } : {}),
         ...(options.connectionId ? { connection_id: options.connectionId } : {}),
-        ...(options.sessionDefinition
-          ? { session_definition: options.sessionDefinition }
-          : {}),
+        ...(options.sessionDefinition ? { session_definition: options.sessionDefinition } : {}),
         ...(options.workloadType ? { workload_type: options.workloadType } : {}),
         ...(options.workloadConfig ? { workload_config: options.workloadConfig } : {}),
       });
@@ -718,7 +716,9 @@ export function buildWorkflowHttpAdapter(client: ApiClient): IWorkflowService {
     async saveWorkflow(workflow: Workflow) {
       const body = toWorkflowBody(workflow);
       try {
-        const existing = await client.get<RawWorkflow>(`/workflows/${encodeURIComponent(workflow.id)}`);
+        const existing = await client.get<RawWorkflow>(
+          `/workflows/${encodeURIComponent(workflow.id)}`,
+        );
         if (existing) {
           const raw = await client.put<RawWorkflow>(
             `/workflows/${encodeURIComponent(workflow.id)}`,

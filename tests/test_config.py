@@ -700,6 +700,28 @@ git:
         assert settings.database.host == "localhost"
         assert settings.pod_manager.kwargs == {}
 
+    def test_settings_reloads_config_paths_when_niuu_config_changes(self, tmp_path, monkeypatch):
+        """Settings should resolve NIUU_CONFIG at instantiation time, not import time."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            """
+pod_manager:
+  kwargs:
+    namespace: dynamic-test
+""".strip()
+        )
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        monkeypatch.setenv("NIUU_CONFIG", str(config_file))
+        configured = Settings()
+        assert configured.pod_manager.kwargs == {"namespace": "dynamic-test"}
+
+        monkeypatch.chdir(empty_dir)
+        monkeypatch.delenv("NIUU_CONFIG", raising=False)
+        defaults = Settings()
+        assert defaults.pod_manager.kwargs == {}
+
     def test_settings_loads_seeded_integrations_from_yaml(self, tmp_path, monkeypatch):
         """Settings parses config-seeded integration connections."""
         yaml_content = """

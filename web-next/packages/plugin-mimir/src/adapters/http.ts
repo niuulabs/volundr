@@ -522,7 +522,10 @@ export function buildMimirHttpAdapter(client: ApiClient): IMimirService {
         return toRegistryMount(raw);
       },
 
-      async updateRegistryMount(id: string, mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount> {
+      async updateRegistryMount(
+        id: string,
+        mount: Omit<RegistryMount, 'id'>,
+      ): Promise<RegistryMount> {
         const raw = await client.put<RawRegistryMount>(`/registry/mounts/${id}`, {
           name: mount.name,
           kind: mount.kind,

@@ -932,7 +932,10 @@ export function createMimirMockAdapter(): IMimirService {
         return created;
       },
 
-      async updateRegistryMount(id: string, mount: Omit<RegistryMount, 'id'>): Promise<RegistryMount> {
+      async updateRegistryMount(
+        id: string,
+        mount: Omit<RegistryMount, 'id'>,
+      ): Promise<RegistryMount> {
         const updated = { ...mount, id };
         registryMounts = registryMounts.map((entry) => (entry.id === id ? updated : entry));
         return updated;

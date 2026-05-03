@@ -70,10 +70,7 @@ import {
   type IIdentityService,
 } from '@niuulabs/plugin-sdk';
 import type { NiuuConfig, ServiceConfig, ServicesMap } from '@niuulabs/plugin-sdk';
-import {
-  buildRepoCatalogHttpAdapter,
-  createMockRepoCatalogService,
-} from './repoCatalog';
+import { buildRepoCatalogHttpAdapter, createMockRepoCatalogService } from './repoCatalog';
 
 export interface ServiceBackendStatus {
   mode: 'live' | 'mock';

@@ -403,9 +403,12 @@ describe('buildWorkflowHttpAdapter', () => {
 
     await buildWorkflowHttpAdapter(client).saveWorkflow(workflow);
 
-    expect(client.post).toHaveBeenCalledWith('/workflows', expect.objectContaining({
-      resourceBindings: rawWorkflow.resourceBindings,
-    }));
+    expect(client.post).toHaveBeenCalledWith(
+      '/workflows',
+      expect.objectContaining({
+        resourceBindings: rawWorkflow.resourceBindings,
+      }),
+    );
   });
 });
 

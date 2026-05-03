@@ -301,11 +301,7 @@ function SagasPageContent() {
   const allSagas = useMemo(() => sagas ?? [], [sagas]);
   const importedTrackerIds = useMemo(
     () =>
-      new Set(
-        allSagas
-          .filter((saga) => saga.status !== 'complete')
-          .map((saga) => saga.trackerId),
-      ),
+      new Set(allSagas.filter((saga) => saga.status !== 'complete').map((saga) => saga.trackerId)),
     [allSagas],
   );
   const existingSagaSlugs = useMemo(() => new Set(allSagas.map((saga) => saga.slug)), [allSagas]);
@@ -439,7 +435,11 @@ function SagasPageContent() {
 
     setIsImporting(true);
     try {
-      const importedSaga = await tracker.importProject(selectedProject.id, selectedRepos, baseBranch);
+      const importedSaga = await tracker.importProject(
+        selectedProject.id,
+        selectedRepos,
+        baseBranch,
+      );
       await queryClient.invalidateQueries({ queryKey: ['tyr', 'sagas'] });
       setSelectedSagaId(importedSaga.id);
       setShowImportModal(false);

@@ -260,7 +260,8 @@ export function SessionChat({
     (event: MeshEvent, outcomeOnly = false) => {
       const targetTime = event.timestamp.getTime();
       const participantMsgs = messages.filter(
-        (message) => message.participant?.peerId === event.participantId && message.role === 'assistant',
+        (message) =>
+          message.participant?.peerId === event.participantId && message.role === 'assistant',
       );
       const scopedMessages =
         outcomeOnly || event.type === 'outcome'
@@ -291,13 +292,16 @@ export function SessionChat({
     [findClosestParticipantMessage],
   );
 
-  const handleOutcomeShowDetails = useCallback((event: Extract<MeshEvent, { type: 'outcome' }>) => {
-    const closest = findClosestParticipantMessage(event, true);
-    setSelectedOutcomeDetail({
-      event,
-      content: formatOutcomeDialogContent(closest?.content, event),
-    });
-  }, [findClosestParticipantMessage]);
+  const handleOutcomeShowDetails = useCallback(
+    (event: Extract<MeshEvent, { type: 'outcome' }>) => {
+      const closest = findClosestParticipantMessage(event, true);
+      setSelectedOutcomeDetail({
+        event,
+        content: formatOutcomeDialogContent(closest?.content, event),
+      });
+    },
+    [findClosestParticipantMessage],
+  );
 
   const hasConversation = useMemo(
     () =>
@@ -522,9 +526,7 @@ export function SessionChat({
       data-has-sidebar={hasSidebar || undefined}
       data-right-panel={showRightPanel || undefined}
       data-right-panel-collapsed={
-        showRightPanel &&
-        effectiveRightPanelMode === 'cascade' &&
-        cascadePanelCollapsed
+        showRightPanel && effectiveRightPanelMode === 'cascade' && cascadePanelCollapsed
           ? true
           : undefined
       }

@@ -354,7 +354,9 @@ export function pushOutcomeField(lines: string[], key: string, value: unknown): 
 
 export function formatOutcomeContent(event: CliStreamEvent): string {
   const fields =
-    event.fields && typeof event.fields === 'object' ? { ...event.fields } : ({} as Record<string, unknown>);
+    event.fields && typeof event.fields === 'object'
+      ? { ...event.fields }
+      : ({} as Record<string, unknown>);
 
   const lines: string[] = [];
   pushOutcomeField(lines, 'verdict', event.verdict ?? fields.verdict);
@@ -907,7 +909,7 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 ? event.id
                 : typeof event.request_id === 'string' && event.request_id
                   ? event.request_id
-                : generateId();
+                  : generateId();
             const content = typeof event.content === 'string' ? event.content : '';
             if (!content) break;
             setMessages((prev) => {
@@ -1144,7 +1146,10 @@ export function useSkuldChat(url: string | null): UseSkuldChatResult {
                 typeof frame.metadata?.input === 'object' && frame.metadata.input !== null
                   ? (frame.metadata.input as Record<string, unknown>)
                   : {};
-              stream.parts = [...stream.parts, { type: 'tool_use', id: toolId, name: toolName, input }];
+              stream.parts = [
+                ...stream.parts,
+                { type: 'tool_use', id: toolId, name: toolName, input },
+              ];
             } else if (frame.type === 'tool_result') {
               const result =
                 typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data ?? '');
