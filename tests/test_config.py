@@ -693,6 +693,7 @@ git:
         """Settings uses defaults when no YAML file exists."""
         # Change to a directory without config.yaml
         monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("NIUU_CONFIG", raising=False)
 
         settings = Settings()
 
